@@ -27,3 +27,7 @@ export async function writeConfig(content: string): Promise<void> {
 export async function getBridgeLogs(): Promise<string[]> {
   return invoke<string[]>('get_bridge_logs')
 }
+
+export async function getAppVersion(): Promise<string> {
+  return invoke<string>('get_app_version')
+}

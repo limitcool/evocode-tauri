@@ -11,7 +11,7 @@
             <span class="method">POST</span><code>/responses</code>
           </div>
         </div>
-        <div class="version-badge">v0.1.2</div>
+        <div v-if="currentVersion" class="version-badge">v{{ currentVersion }}</div>
       </div>
     </a-card>
 
@@ -28,13 +28,14 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { startBridge, stopBridge, getBridgeStatus, readConfig } from '../api/bridge'
+import { startBridge, stopBridge, getBridgeStatus, readConfig, getAppVersion } from '../api/bridge'
 import BridgeStatus from '../components/BridgeStatus.vue'
 import LogPanel from '../components/LogPanel.vue'
 
 const router = useRouter()
 const bridgeStatus = ref('stopped')
 const loading = ref(false)
+const currentVersion = ref('')
 
 async function updateStatus() {
   bridgeStatus.value = await getBridgeStatus()
@@ -71,7 +72,10 @@ async function toggleBridge() {
   }
 }
 
-onMounted(updateStatus)
+onMounted(async () => {
+  await updateStatus()
+  currentVersion.value = await getAppVersion()
+})
 </script>
 
 <style scoped>

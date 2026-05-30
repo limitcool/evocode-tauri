@@ -348,6 +348,11 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+#[tauri::command]
+async fn get_app_version() -> Result<String, String> {
+    Ok(tauri::VERSION.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -365,6 +370,7 @@ pub fn run() {
             read_config,
             write_config,
             get_bridge_logs,
+            get_app_version,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
