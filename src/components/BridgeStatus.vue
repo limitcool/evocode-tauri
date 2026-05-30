@@ -11,7 +11,7 @@
       </div>
     </div>
     <button class="toggle-btn" :class="status" :disabled="loading" @click="$emit('toggle')">
-      {{ loading ? '...' : status === 'running' ? 'Stop Bridge' : 'Start Bridge' }}
+      {{ loading ? '...' : status === 'running' ? 'Stop' : 'Serve' }}
     </button>
   </div>
 </template>

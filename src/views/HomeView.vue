@@ -11,7 +11,7 @@
             <span class="method">POST</span><code>/responses</code>
           </div>
         </div>
-        <div class="version-badge">v0.1.0</div>
+        <div class="version-badge">v0.1.2</div>
       </div>
     </a-card>
 
@@ -27,10 +27,12 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { startBridge, stopBridge, getBridgeStatus } from '../api/bridge'
+import { useRouter } from 'vue-router'
+import { startBridge, stopBridge, getBridgeStatus, readConfig } from '../api/bridge'
 import BridgeStatus from '../components/BridgeStatus.vue'
 import LogPanel from '../components/LogPanel.vue'
 
+const router = useRouter()
 const bridgeStatus = ref('stopped')
 const loading = ref(false)
 
@@ -39,13 +41,30 @@ async function updateStatus() {
 }
 
 async function toggleBridge() {
+  if (bridgeStatus.value === 'running') {
+    loading.value = true
+    try {
+      await stopBridge()
+      await updateStatus()
+    } finally {
+      loading.value = false
+    }
+    return
+  }
+
+  // check provider config before starting
+  try {
+    const text = await readConfig()
+    const hasProvider = text.includes('provider = "') && text.includes('[providers.')
+    if (!hasProvider) {
+      router.push('/config')
+      return
+    }
+  } catch {}
+
   loading.value = true
   try {
-    if (bridgeStatus.value === 'running') {
-      await stopBridge()
-    } else {
-      await startBridge()
-    }
+    await startBridge()
     await updateStatus()
   } finally {
     loading.value = false
@@ -94,13 +113,6 @@ onMounted(updateStatus)
   display: flex;
   flex-direction: column;
   gap: 6px;
-}
-
-.endpoint {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
 }
 
 .method {
