@@ -1,14 +1,10 @@
-use std::collections::HashMap;
-use reqwest::Client;
-use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
-use anyhow::Context;
-use serde::Deserialize;
 use tauri::State;
 use tokio::sync::Mutex as AsyncMutex;
-use evocode_proto::{ProviderRoute, ServerConfig, WireProtocol};
+use evocode_config::load_config;
+use evocode_proto::{ServerConfig, DEFAULT_BASE_URL};
 
 pub struct BridgeState {
     handle: Arc<AsyncMutex<Option<tokio::task::JoinHandle<()>>>>,
@@ -39,96 +35,6 @@ fn get_config_path() -> Option<PathBuf> {
         return Some(typo_compat);
     }
     Some(primary)
-}
-
-fn load_config() -> anyhow::Result<ServerConfig> {
-    let path = get_config_path().context("failed to locate home directory")?;
-    if !path.exists() {
-        return Ok(default_server_config());
-    }
-    let content = std::fs::read_to_string(&path)
-        .with_context(|| format!("failed to read {}", path.display()))?;
-    let config: EvocodeConfig = toml::from_str(&content)?;
-    Ok(config.into())
-}
-
-fn default_server_config() -> ServerConfig {
-    let listen: SocketAddr = "127.0.0.1:17761".parse().unwrap();
-    ServerConfig {
-        listen,
-        codex_bin: String::new(),
-        codex_home: None,
-        codex_config_overrides: Vec::new(),
-        codex_env: HashMap::new(),
-        cwd: None,
-        model: Some("codex".to_string()),
-        upstream_url: String::new(),
-        api_key: String::new(),
-        protocol: WireProtocol::Openai,
-        providers: Vec::new(),
-        http_client: Client::new(),
-    }
-}
-
-#[derive(Debug, Deserialize)]
-#[allow(dead_code)]
-struct EvocodeConfig {
-    provider: Option<String>,
-    model: Option<String>,
-    providers: Option<HashMap<String, ProviderConfig>>,
-    api_key: Option<String>,
-    api_key_env: Option<String>,
-    base_url: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct ProviderConfig {
-    base_url: Option<String>,
-    wire_api: Option<String>,
-    model: Option<String>,
-    models: Option<Vec<String>>,
-    api_key: Option<String>,
-    api_key_env: Option<String>,
-    api_key_header: Option<String>,
-}
-
-impl From<EvocodeConfig> for ServerConfig {
-    fn from(config: EvocodeConfig) -> Self {
-        let listen: SocketAddr = "127.0.0.1:17761".parse().unwrap();
-
-        let providers = config.providers.map(|ps| {
-            ps.into_iter().map(|(id, p)| {
-                let models = p.models.unwrap_or_else(|| {
-                    p.model.clone().map(|m| vec![m]).unwrap_or_else(|| vec!["*".to_string()])
-                });
-                ProviderRoute {
-                    id,
-                    base_url: p.base_url.unwrap_or_default(),
-                    api_key: p.api_key.or_else(|| p.api_key_env.as_ref()
-                        .and_then(|e| std::env::var(e).ok())).unwrap_or_default(),
-                    api_key_header: p.api_key_header.unwrap_or_else(|| "X-Api-Key".to_string()),
-                    protocol: p.wire_api.as_ref().and_then(|v| wire_api_to_protocol(v))
-                        .unwrap_or(WireProtocol::Openai),
-                    models,
-                }
-            }).collect::<Vec<_>>()
-        }).unwrap_or_default();
-
-        ServerConfig {
-            listen,
-            codex_bin: String::new(),
-            codex_home: None,
-            codex_config_overrides: Vec::new(),
-            codex_env: HashMap::new(),
-            cwd: None,
-            model: config.model.or(Some("codex".to_string())),
-            upstream_url: config.base_url.unwrap_or_default(),
-            api_key: config.api_key.unwrap_or_default(),
-            protocol: WireProtocol::Openai,
-            providers,
-            http_client: Client::new(),
-        }
-    }
 }
 
 fn setup_logging(logs: Arc<Mutex<Vec<String>>>) {
@@ -164,7 +70,6 @@ impl std::io::Write for LogWriter {
             if !s.is_empty() {
                 let mut g = self.0 .0.lock().unwrap();
                 if g.len() >= 1000 { g.remove(0); }
-                // each write call is one line - trim and push
                 g.push(s.trim_end().to_string());
             }
         }
@@ -178,7 +83,6 @@ fn strip_ansi(s: &str) -> String {
     let mut chars = s.chars().peekable();
     while let Some(c) = chars.next() {
         if c == '\x1b' {
-            // skip ANSI escape sequence
             if chars.next() == Some('[') {
                 while let Some(&ch) = chars.peek() {
                     match ch {
@@ -189,7 +93,6 @@ fn strip_ansi(s: &str) -> String {
                 }
             }
         } else if c == '[' {
-            // skip soft ANSI like [2m, [0m, [32m
             let mut buf = String::from("[");
             while let Some(&ch) = chars.peek() {
                 match ch {
@@ -199,7 +102,7 @@ fn strip_ansi(s: &str) -> String {
                 }
             }
             if !buf.is_empty() && buf != "[" {
-                continue; // skip this soft-ANSI sequence
+                continue;
             }
             r.push('[');
         } else {
@@ -207,15 +110,6 @@ fn strip_ansi(s: &str) -> String {
         }
     }
     r
-}
-
-fn wire_api_to_protocol(v: &str) -> Option<WireProtocol> {
-    match v {
-        "anthropic" | "messages" => Some(WireProtocol::Anthropic),
-        "chat" | "chat_completions" | "chat-completions" => Some(WireProtocol::ChatCompletions),
-        "openai" | "responses" => Some(WireProtocol::Openai),
-        _ => None,
-    }
 }
 
 #[tauri::command]
@@ -228,10 +122,19 @@ async fn start_bridge(state: State<'_, BridgeState>) -> Result<String, String> {
     state.logs.lock().unwrap().clear();
     let config = load_config().map_err(|e| e.to_string())?;
 
+    let mut cfg = ServerConfig::default();
+    cfg.providers = config.provider_routes();
+    cfg.codex_config_overrides = config.codex_config_overrides();
+    cfg.codex_env = config.codex_env();
+    cfg.model = Some(config.selected_model());
+    cfg.upstream_url = config.base_url().unwrap_or(DEFAULT_BASE_URL).to_string();
+    cfg.api_key = config.api_key().unwrap_or("").to_string();
+    cfg.protocol = config.protocol();
+
     setup_logging(state.logs.clone());
 
     let handle = tokio::spawn(async move {
-        if let Err(e) = evocode_proto::serve(config).await {
+        if let Err(e) = evocode_proto::serve(cfg).await {
             let msg = format!("[ERROR] {}", e);
             eprintln!("{}", msg);
             tracing::error!("bridge error: {}", e);
@@ -331,7 +234,6 @@ fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         })
         .build(app)?;
 
-    // hide window on close button instead of quitting
     if let Some(win) = window {
         let handle = app_handle.clone();
         win.on_window_event(move |event| {
