@@ -129,7 +129,7 @@ onUnmounted(stopPolling)
 .health-badge.stopped { color: #888; }
 
 .log-output {
-  height: 200px;
+  height: 320px;
   overflow-y: auto;
   font-family: monospace;
   font-size: 12px;

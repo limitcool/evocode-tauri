@@ -1,8 +1,22 @@
 <template>
-  <DefaultLayout>
-    <router-view />
-  </DefaultLayout>
+  <a-config-provider
+    :theme="{
+      algorithm: theme.darkAlgorithm,
+      token: {
+        colorPrimary: '#60a5fa',
+      }
+    }"
+  >
+    <DefaultLayout>
+      <router-view />
+    </DefaultLayout>
+  </a-config-provider>
 </template>
+
+<script setup lang="ts">
+import { theme } from 'ant-design-vue'
+import DefaultLayout from './layouts/DefaultLayout.vue'
+</script>
 
 <style>
 * {
