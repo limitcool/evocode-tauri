@@ -16,25 +16,36 @@
     >
       <a-divider orientation="left">General</a-divider>
 
+      <!-- Provider section -->
       <a-form-item label="Provider" name="providerId">
         <div class="provider-row">
           <a-select
             v-model:value="formState.providerId"
-            placeholder="Select a provider"
+            placeholder="Choose a provider..."
             style="flex:1"
             @change="onProviderChange"
           >
-            <a-select-option value="">-- Select --</a-select-option>
+            <a-select-option value="">-- Choose --</a-select-option>
             <a-select-option v-for="id in providerIds" :key="id" :value="id">{{ id }}</a-select-option>
           </a-select>
           <a-input
             v-model:value="newProviderName"
-            placeholder="New provider name"
-            style="width: 140px"
+            placeholder="New name"
+            style="width: 120px"
           />
-          <a-button type="default" :disabled="!newProviderName" @click="addProvider">Add</a-button>
+          <a-button type="default" :disabled="!newProviderName" @click="addProvider">+ Add</a-button>
         </div>
+        <template #extra>
+          <span class="field-hint">Or enter a name above and click Add to create a new provider.</span>
+        </template>
       </a-form-item>
+
+      <!-- Quick presets -->
+      <div class="presets" v-if="!formState.providerId || newProviderName">
+        <span class="presets-label">Quick start templates:</span>
+        <a-button size="small" @click="applyPreset('openai_chat')">OpenAI Chat (Chat Completions)</a-button>
+        <a-button size="small" @click="applyPreset('anthropic')">Anthropic (Messages API)</a-button>
+      </div>
 
       <a-row :gutter="12">
         <a-col :span="12">
@@ -44,6 +55,7 @@
               :min="1"
               style="width:100%"
             />
+            <template #extra><span class="field-hint">Max context size for the model.</span></template>
           </a-form-item>
         </a-col>
         <a-col :span="12">
@@ -53,21 +65,34 @@
               :min="1"
               style="width:100%"
             />
+            <template #extra><span class="field-hint">Start compacting when tokens exceed this.</span></template>
           </a-form-item>
         </a-col>
       </a-row>
 
-      <a-divider orientation="left" v-if="formState.providerId">
-        Provider: {{ formState.providerId }}
-      </a-divider>
-
+      <!-- Provider config - only shows when provider is selected -->
       <template v-if="formState.providerId">
-        <a-form-item label="Model" name="model">
-          <a-input v-model:value="formState.model" placeholder="e.g. gpt-4.1" />
+        <a-divider orientation="left">
+          Provider: {{ formState.providerId }}
+          <a-popconfirm title="Remove this provider?" ok-text="Yes" cancel-text="No" @confirm="removeProvider">
+            <DeleteOutlined class="delete-icon" />
+          </a-popconfirm>
+        </a-divider>
+
+        <a-form-item
+          label="Model"
+          name="model"
+          :rules="[{ required: true, message: 'Please enter the model name' }]"
+        >
+          <a-input v-model:value="formState.model" placeholder="e.g. MiniMax-M2.7, gpt-4.1" />
         </a-form-item>
 
-        <a-form-item label="Base URL" name="baseUrl">
-          <a-input v-model:value="formState.baseUrl" placeholder="https://api.example.com" />
+        <a-form-item
+          label="Base URL"
+          name="baseUrl"
+          :rules="[{ required: true, message: 'Please enter the base URL' }]"
+        >
+          <a-input v-model:value="formState.baseUrl" placeholder="https://api.example.com/v1" />
         </a-form-item>
 
         <a-form-item label="API Key" name="apiKey">
@@ -77,23 +102,37 @@
         <a-row :gutter="12">
           <a-col :span="12">
             <a-form-item label="Wire API" name="wireApi">
-              <a-select v-model:value="formState.wireApi">
-                <a-select-option value="anthropic">Anthropic</a-select-option>
-                <a-select-option value="chat_completions">Chat Completions</a-select-option>
-                <a-select-option value="openai">OpenAI Responses</a-select-option>
-              </a-select>
+              <a-tooltip title="Which API protocol this provider exposes: Anthropic (messages), Chat Completions, or OpenAI (responses)">
+                <a-select v-model:value="formState.wireApi">
+                  <a-select-option value="anthropic">Anthropic (/v1/messages)</a-select-option>
+                  <a-select-option value="chat_completions">Chat Completions (/v1/chat)</a-select-option>
+                  <a-select-option value="openai">OpenAI Responses (/responses)</a-select-option>
+                </a-select>
+              </a-tooltip>
             </a-form-item>
           </a-col>
           <a-col :span="12">
             <a-form-item label="API Key Header" name="apiKeyHeader">
-              <a-input v-model:value="formState.apiKeyHeader" placeholder="X-Api-Key" />
+              <a-tooltip title="The HTTP header name for the API key, e.g. X-Api-Key or Authorization">
+                <a-input v-model:value="formState.apiKeyHeader" placeholder="X-Api-Key" />
+              </a-tooltip>
             </a-form-item>
           </a-col>
         </a-row>
       </template>
 
+      <a-form-item v-if="!formState.providerId">
+        <a-alert type="info" message="Select or create a provider above to configure its settings." show-icon />
+      </a-form-item>
+
       <a-form-item>
-        <a-button type="primary" html-type="submit" block :loading="saving">
+        <a-button
+          type="primary"
+          html-type="submit"
+          block
+          :loading="saving"
+          :disabled="!formState.providerId"
+        >
           Save Config
         </a-button>
       </a-form-item>
@@ -112,7 +151,7 @@
 
 <script setup lang="ts">
 import { reactive, ref, onMounted } from 'vue'
-import { LeftOutlined } from '@ant-design/icons-vue'
+import { LeftOutlined, DeleteOutlined } from '@ant-design/icons-vue'
 import { readConfig, writeConfig } from '../api/bridge'
 
 interface FormState {
@@ -124,6 +163,21 @@ interface FormState {
   model: string
   apiKey: string
   apiKeyHeader: string
+}
+
+const PRESETS: Record<string, Partial<FormState>> = {
+  openai_chat: {
+    wireApi: 'chat_completions',
+    baseUrl: 'https://api.openai.com/v1',
+    model: 'gpt-4.1',
+    apiKeyHeader: 'Authorization',
+  },
+  anthropic: {
+    wireApi: 'anthropic',
+    baseUrl: 'https://api.anthropic.com',
+    model: 'claude-3-5-sonnet-latest',
+    apiKeyHeader: 'X-Api-Key',
+  },
 }
 
 const DEFAULT_CONTEXT_WINDOW = 256000
@@ -145,17 +199,34 @@ const formState = reactive<FormState>({
   apiKeyHeader: 'X-Api-Key',
 })
 
+function applyPreset(name: string) {
+  const preset = PRESETS[name]
+  if (!preset) return
+  if (!providerIds.value.includes(name)) {
+    providerIds.value.push(name)
+  }
+  formState.providerId = name
+  Object.assign(formState, preset)
+}
+
 function addProvider() {
   const name = newProviderName.value.trim()
   if (name && !providerIds.value.includes(name)) {
     providerIds.value.push(name)
     formState.providerId = name
     newProviderName.value = ''
+    onProviderChange()
   }
 }
 
+function removeProvider() {
+  const idx = providerIds.value.indexOf(formState.providerId)
+  if (idx > -1) providerIds.value.splice(idx, 1)
+  formState.providerId = ''
+  onProviderChange()
+}
+
 function onProviderChange() {
-  // reset provider-specific fields when provider changes
   formState.model = ''
   formState.baseUrl = ''
   formState.apiKey = ''
@@ -235,6 +306,11 @@ async function handleSave() {
     msg.type = 'error'
     return
   }
+  if (!formState.model || !formState.baseUrl) {
+    msg.text = 'Please fill in Model and Base URL for the provider.'
+    msg.type = 'error'
+    return
+  }
   saving.value = true
   try {
     const content = buildConfig()
@@ -302,6 +378,30 @@ onMounted(async () => {
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+.field-hint {
+  font-size: 11px;
+  color: #666;
+}
+
+.presets {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.presets-label {
+  font-size: 12px;
+  color: #666;
+}
+
+.delete-icon {
+  margin-left: 8px;
+  color: #ef4444;
+  cursor: pointer;
+  font-size: 14px;
 }
 
 :deep(.ant-divider) {
