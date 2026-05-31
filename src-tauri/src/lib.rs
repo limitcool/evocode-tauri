@@ -201,48 +201,28 @@ async fn sync_to_codex(
     base_url: String,
     _api_key: String,
     _api_key_header: String,
-    wire_api: String,
+    _wire_api: String,
 ) -> Result<(), String> {
+    use evocode_config::{EvocodeConfig, ProviderConfig};
+
     let codex_home = evocode_config::default_codex_home()
         .map_err(|e| e.to_string())?;
 
-    let config_path = codex_home.join("config.toml");
-    let existing: toml::Value = if config_path.exists() {
-        let content = tokio::fs::read_to_string(&config_path)
-            .await
-            .map_err(|e| e.to_string())?;
-        // Normalize line endings and strip BOM
-        let content = content.replace("\r\n", "\n").replace("\r", "\n");
-        toml::from_str(&content).map_err(|e| format!("parse error: {}", e))?
-    } else {
-        toml::Value::Table(toml::Table::new())
+    let provider_config = ProviderConfig {
+        model: Some(model),
+        base_url: Some(base_url),
+        api_key: None,
+        api_key_env: None,
+        api_key_header: None,
+        wire_api: None,
+        models: vec![],
     };
 
-    let mut config = existing;
-    if !config.is_table() {
-        config = toml::Value::Table(toml::Table::new());
-    }
-    let table = config.as_table_mut().unwrap();
+    let mut config = EvocodeConfig::default();
+    config.provider = Some(provider_id.clone());
+    config.providers.insert(provider_id.clone(), provider_config);
 
-    // Update top-level model and model_provider
-    table.insert("model".to_string(), toml::Value::String(model.clone()));
-    table.insert("model_provider".to_string(), toml::Value::String(provider_id.clone()));
-
-    // Update or insert [model_providers.<id>] section
-    let provider_key = format!("model_providers.{}", provider_id);
-    let provider_table = table.entry(provider_key.clone())
-        .or_insert_with(|| toml::Value::Table(toml::Table::new()))
-        .as_table_mut()
-        .unwrap();
-
-    provider_table.insert("name".to_string(), toml::Value::String(provider_id.clone()));
-    provider_table.insert("base_url".to_string(), toml::Value::String(base_url));
-    provider_table.insert("wire_api".to_string(), toml::Value::String(wire_api));
-    provider_table.insert("requires_openai_auth".to_string(), toml::Value::Boolean(true));
-
-    tokio::fs::create_dir_all(&codex_home).await.map_err(|e| e.to_string())?;
-    let output = toml::to_string_pretty(&config).map_err(|e| e.to_string())?;
-    tokio::fs::write(&config_path, output).await.map_err(|e| e.to_string())
+    config.setup_codex_home(&codex_home).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
