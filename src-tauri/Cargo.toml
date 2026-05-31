@@ -1,7 +1,7 @@
 [package]
 name = "evocode-tauri"
 version = "0.1.10"
-edition = "2021"
+edition = "2024"
 
 [lib]
 name = "evocode_tauri_lib"
