@@ -56,50 +56,13 @@ jobs:
           prerelease: false
           target: ${{ matrix.target }}
 
-      - name: Ad-hoc sign & verify macOS app
+      - name: Verify macOS app signature
         if: matrix.platform == 'macos-latest'
         run: |
-          set -e
-          echo "=== Diagnostic ==="
-          pwd
-          echo "--- src-tauri/ ---"
-          ls -la src-tauri/ 2>&1 || true
-          echo "--- target/ ---"
-          ls -la src-tauri/target/ 2>&1 || echo "no target dir"
-          echo "--- target tree (depth 4) ---"
-          find src-tauri/target -maxdepth 4 -type d 2>&1 | head -60 || true
-          echo "--- bundle dirs anywhere ---"
-          find "$GITHUB_WORKSPACE" -name "bundle" -type d 2>&1 || true
-          echo "--- any .app found ---"
-          find "$GITHUB_WORKSPACE" -name "*.app" -type d 2>&1 || true
-          echo "=== Locating .app ==="
-          APP_PATH=""
-          for C in \
-            "src-tauri/target/aarch64-apple-darwin/release/bundle/macos/evocode-tauri.app" \
-            "src-tauri/target/aarch64-apple-darwin/release/bundle/macos/evocode.app" \
-            "src-tauri/target/release/bundle/macos/evocode-tauri.app" \
-            "src-tauri/target/release/bundle/macos/evocode.app"; do
-            if [ -d "$C" ]; then
-              APP_PATH="$C"
-              echo "Matched candidate: $C"
-              break
-            fi
-          done
-          if [ -z "$APP_PATH" ]; then
-            APP_PATH=$(find "$GITHUB_WORKSPACE" -path "*/bundle/macos/*.app" -type d 2>/dev/null | head -1 || true)
-          fi
-          if [ -z "$APP_PATH" ] || [ ! -d "$APP_PATH" ]; then
-            echo "::error::No .app bundle found. See diagnostic above."
+          APP="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/evocode-tauri.app"
+          if [ ! -d "$APP" ]; then
+            echo "::error::$APP not found"
             exit 1
           fi
-          echo "Using APP_PATH=$APP_PATH"
-          ls -la "$APP_PATH" | head -20
-          echo ""
-          echo "=== Signing ==="
-          codesign --force --deep --sign - "$APP_PATH"
-          echo ""
-          echo "=== Verify ==="
-          codesign --verify --verbose=2 "$APP_PATH"
-          echo ""
-          echo "=== Details ==="
-          codesign -dvv "$APP_PATH" 2>&1 | head -20
+          codesign --verify --strict --verbose=2 "$APP"
+          codesign -dvv "$APP" 2>&1 | grep -E "Signature=|Identifier=|Format="
