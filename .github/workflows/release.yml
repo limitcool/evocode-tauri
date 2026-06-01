@@ -59,9 +59,23 @@ jobs:
       - name: Verify macOS app signature
         if: matrix.platform == 'macos-latest'
         run: |
-          APP="src-tauri/target/aarch64-apple-darwin/release/bundle/macos/evocode-tauri.app"
-          if [ ! -d "$APP" ]; then
-            echo "::error::$APP not found"
+          APP=""
+          for C in \
+            "src-tauri/target/aarch64-apple-darwin/release/bundle/macos/evocode-tauri.app" \
+            "src-tauri/target/release/bundle/macos/evocode-tauri.app" \
+            "src-tauri/target/universal-apple-darwin/release/bundle/macos/evocode-tauri.app"; do
+            if [ -d "$C" ]; then
+              APP="$C"
+              echo "Found at: $APP"
+              break
+            fi
+          done
+          if [ -z "$APP" ]; then
+            echo "::error::.app not found in any expected location"
+            echo "--- target tree ---"
+            find src-tauri/target -maxdepth 5 -type d 2>&1 | head -40
+            echo "--- any .app ---"
+            find "$GITHUB_WORKSPACE" -name "*.app" -type d 2>&1
             exit 1
           fi
           codesign --verify --strict --verbose=2 "$APP"
