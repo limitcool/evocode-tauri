@@ -54,3 +54,23 @@ jobs:
           releaseBody: 'See the assets to download this version.'
           releaseDraft: false
           prerelease: false
+
+      - name: Ad-hoc sign & verify macOS app
+        if: matrix.platform == 'macos-latest'
+        run: |
+          set -e
+          APP_DIR="src-tauri/target/aarch64-apple-darwin/release/bundle/macos"
+          APP_PATH="$APP_DIR/evocode-tauri.app"
+          if [ ! -d "$APP_PATH" ]; then
+            echo "::error::App bundle not found at $APP_PATH"
+            ls -la "$APP_DIR" 2>/dev/null || true
+            exit 1
+          fi
+          echo "Before signing:"
+          codesign -dv "$APP_PATH" 2>&1 || true
+          echo "---"
+          codesign --force --deep --sign - "$APP_PATH"
+          echo "After signing:"
+          codesign --verify --verbose=2 "$APP_PATH"
+          echo "---"
+          codesign -dvv "$APP_PATH" 2>&1 | head -20
