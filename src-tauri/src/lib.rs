@@ -216,6 +216,7 @@ async fn sync_to_codex(
         api_key_header: None,
         wire_api: None,
         models: vec![],
+        tool_use_guidance: None,
     };
 
     let mut config = EvocodeConfig::default();
