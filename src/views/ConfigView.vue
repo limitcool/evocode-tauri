@@ -696,24 +696,17 @@ async function handleSave() {
   }
 }
 
+// Sync reads from ~/.evocode/config.toml directly, so make sure to
+// save before calling this.
 async function handleSyncToCodex() {
   if (!activeId.value) {
     msg.text = "Add a provider first."
     msg.type = "error"
     return
   }
-  snapshotActive()
-  const cur = providers[activeId.value]
   saving.value = true
   try {
-    await syncToCodex(
-      activeId.value,
-      cur.model,
-      cur.baseUrl,
-      cur.apiKey,
-      cur.apiKeyHeader,
-      cur.wireApi,
-    )
+    await syncToCodex()
     msg.text = "Synced to .codex/config.toml!"
     msg.type = "success"
     setTimeout(() => { msg.text = "" }, 4000)

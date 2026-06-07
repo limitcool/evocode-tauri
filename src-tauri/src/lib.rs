@@ -61,23 +61,6 @@ fn setup_logging(logs: Arc<Mutex<Vec<String>>>) {
         .try_init();
 }
 
-struct MutexCell<T>(Arc<Mutex<T>>);
-struct LogWriter(MutexCell<Vec<String>>);
-impl std::io::Write for LogWriter {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        if let Ok(s) = std::str::from_utf8(buf) {
-            let s = strip_ansi(s);
-            if !s.is_empty() {
-                let mut g = self.0 .0.lock().unwrap();
-                if g.len() >= 1000 { g.remove(0); }
-                g.push(s.trim_end().to_string());
-            }
-        }
-        Ok(buf.len())
-    }
-    fn flush(&mut self) -> std::io::Result<()> { Ok(()) }
-}
-
 fn strip_ansi(s: &str) -> String {
     let mut r = String::with_capacity(s.len());
     let mut chars = s.chars().peekable();
@@ -197,22 +180,11 @@ async fn write_config(content: String) -> Result<(), String> {
 
 
 #[tauri::command]
-async fn sync_to_codex(
-    base_url: String,
-) -> Result<(), String> {
-    // The Tauri GUI maintains the full multi-provider config in
-    // ~/.evocode/config.toml (parsed by serde via EvocodeConfig). Sync to
-    // Codex should:
-    //   1) Load the full EvocodeConfig so we know the active provider, the
-    //      model limits and every saved provider profile.
-    //   2) Hand off to sync_active_provider_to_codex, which writes the
-    //      four top-level Codex keys + the [model_providers.<active>] block
-    //      and leaves mcp_servers / projects / extra providers intact.
-    //
-    // base_url is the local bridge URL. We keep the bridge URL fixed at
-    // 127.0.0.1:17761, so this argument is reserved for future use.
-    let _ = base_url;
-
+async fn sync_to_codex() -> Result<(), String> {
+    // Reads ~/.evocode/config.toml and syncs the active provider into
+    // ~/.codex/config.toml via sync_active_provider_to_codex. The provider
+    // block only writes name, requires_openai_auth, and the local bridge
+    // URL (127.0.0.1:17761). Other Codex config keys are left untouched.
     let config = evocode_config::load_config().map_err(|e| e.to_string())?;
     let codex_home = evocode_config::default_codex_home()
         .map_err(|e| e.to_string())?;
