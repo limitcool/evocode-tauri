@@ -23,8 +23,9 @@ tauri-plugin-shell = "2"
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "fs"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
-evocode-proto = { git = "https://github.com/evolutions-code/evocode.git", package = "evocode-proto" }
-evocode-config = { git = "https://github.com/evolutions-code/evocode.git", package = "evocode-config" }
+evocode-proto = { path = "C:/Users/Administrator/RustroverProjects/evocode/evocode-proto" }
+evocode-config = { path = "C:/Users/Administrator/RustroverProjects/evocode/evocode-config" }
+
 dirs = "6"
 toml = "0.9"
 reqwest = {version = "0.13", features = ["json"] }

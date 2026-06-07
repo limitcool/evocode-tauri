@@ -292,7 +292,6 @@ interface Provider {
   model: string
   apiKey: string
   apiKeyHeader: string
-  downstreamApiKey: string
 }
 
 interface Limits {
@@ -377,8 +376,7 @@ const formState = reactive<Provider>({
   baseUrl: "",
   model: "",
   apiKey: "",
-  apiKeyHeader: "X-Api-Key",
-  downstreamApiKey: "",
+  apiKeyHeader: "X-Api-Key"
 })
 
 // Wire API switch state - bidirectional sync
@@ -526,7 +524,7 @@ function snapshotActive() {
 function loadActiveIntoForm() {
   const id = activeId.value
   if (!id || !providers[id]) {
-    Object.assign(formState, { providerId: "", wireApi: "anthropic", baseUrl: "", model: "", apiKey: "", apiKeyHeader: "X-Api-Key", downstreamApiKey: "" })
+    Object.assign(formState, { providerId: "", wireApi: "anthropic", baseUrl: "", model: "", apiKey: "", apiKeyHeader: "X-Api-Key" })
     return
   }
   Object.assign(formState, providers[id])
@@ -541,12 +539,6 @@ function setActive(id: string) {
   loadActiveIntoForm()
 }
 
-function genDownstreamKey(): string {
-  const arr = new Uint8Array(32)
-  crypto.getRandomValues(arr)
-  return Array.from(arr, (b) => b.toString(16).padStart(2, "0")).join("")
-}
-
 function addProvider() {
   const name = newProviderName.value.trim()
   if (!name) return
@@ -558,8 +550,7 @@ function addProvider() {
       baseUrl: "",
       model: "",
       apiKey: "",
-      apiKeyHeader: "X-Api-Key",
-      downstreamApiKey: genDownstreamKey(),
+      apiKeyHeader: "X-Api-Key"
     }
   }
   newProviderName.value = ""
@@ -624,8 +615,7 @@ function parseConfig(text: string) {
           baseUrl: "",
           model: "",
           apiKey: "",
-          apiKeyHeader: "X-Api-Key",
-          downstreamApiKey: genDownstreamKey(),
+          apiKeyHeader: "X-Api-Key"
         }
       }
     } else if (trimmed.startsWith("[") && trimmed !== "[providers." + currentProvider + "]") {
@@ -638,7 +628,6 @@ function parseConfig(text: string) {
       else if (trimmed.startsWith("model = ")) p.model = trimmed.replace("model = ", "").replace(/"/g, "")
       else if (trimmed.startsWith("api_key = ")) p.apiKey = trimmed.replace("api_key = ", "").replace(/"/g, "")
       else if (trimmed.startsWith("api_key_header = ")) p.apiKeyHeader = trimmed.replace("api_key_header = \"", "").replace(/"/g, "")
-      else if (trimmed.startsWith("downstream_api_key = ")) p.downstreamApiKey = trimmed.replace("downstream_api_key = ", "").replace(/"/g, "")
     }
   }
 
@@ -674,7 +663,6 @@ function buildConfig(): string {
       `model = "${p.model}"`,
       `api_key = "${p.apiKey}"`,
       `api_key_header = "${p.apiKeyHeader}"`,
-      `downstream_api_key = "${p.downstreamApiKey}"`,
       "",
     )
   }
