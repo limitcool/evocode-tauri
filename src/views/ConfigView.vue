@@ -76,54 +76,27 @@
           </div>
         </div>
 
-        <!-- Middle: presets that fill the current provider -->
+        <!-- Wire API Switch - replaces the Start from a template panel -->
         <div class="glass panel">
           <div class="panel-head">
             <div>
-              <div class="panel-title">Start from a template</div>
-              <div class="panel-sub muted-3">One click fills in Model, Base URL, Wire API and Auth header for the active provider.</div>
+              <div class="panel-title">Wire API</div>
+              <div class="panel-sub muted-3">Choose the protocol. Model and Base URL are filled separately below.</div>
             </div>
           </div>
-          <div class="preset-list">
-            <button
-              v-for="p in PRESETS"
-              :key="p.key"
-              class="preset-card"
-              @click="applyPreset(p.key)"
-            >
-              <div class="preset-head">
-                <span class="preset-logo" :style="{ background: p.color }">
-                  <component :is="p.icon" />
-                </span>
-                <div class="preset-meta">
-                  <div class="preset-name">{{ p.name }}</div>
-                  <div class="preset-tag mono">{{ p.tag }}</div>
-                </div>
-              </div>
-              <div class="preset-desc muted-3">{{ p.desc }}</div>
-              <div class="preset-foot"><code class="mono">{{ p.baseUrl }}</code></div>
-            </button>
-
-            <button class="preset-card ghost" @click="resetForm">
-              <div class="preset-head">
-                <span class="preset-logo" style="background: linear-gradient(135deg, #4d7dff, #8b5cf6)">
-                  <ClearOutlined />
-                </span>
-                <div class="preset-meta">
-                  <div class="preset-name">Clear fields</div>
-                  <div class="preset-tag muted-3">blank slate</div>
-                </div>
-              </div>
-              <div class="preset-desc muted-3">Wipe Model, Base URL, API key and header. Provider id is kept.</div>
-            </button>
-          </div>
+          <a-segmented
+            v-model:value="activePresetKey"
+            :options="wireOptions"
+            block
+            @change="onWireApiChange"
+          />
         </div>
 
         <!-- Bottom: form for the active provider -->
         <div class="glass panel">
           <div class="panel-head">
             <div>
-              <div class="panel-title">Settings for <span class="gradient-text mono">{{ activeId || '...' }}</span></div>
+              <div class="panel-title">Settings for Provider</div>
               <div class="panel-sub muted-3">These values are saved under <code class="mono">[providers.{{ activeId || '...' }}]</code>.</div>
             </div>
             <a-button size="small" :disabled="!activeId" @click="resetForm">
@@ -148,7 +121,7 @@
               <a-col :span="12">
                 <a-form-item label="Wire API">
                   <a-tooltip title="Which API protocol this upstream provider speaks">
-                    <a-select v-model:value="formState.wireApi">
+                    <a-select v-model:value="formState.wireApi" @change="onWireApiSelectChange">
                       <a-select-option value="anthropic">
                         <span class="opt-row"><span class="dot purple" /> Anthropic (/v1/messages)</span>
                       </a-select-option>
@@ -192,11 +165,11 @@
           <div class="panel-head">
             <div>
               <div class="panel-title">Context & auto-compact</div>
-              <div class="panel-sub muted-3">Click a preset to snap to it.</div>
+              <div class="panel-sub muted-3">Drag the sliders or click the preset values.</div>
             </div>
-            <a-tag class="active-tag">{{ contextLabel(limits.contextWindow) }} ctx</a-tag>
           </div>
 
+          <!-- Context Window Slider - Draggable -->
           <div class="slider-block">
             <div class="slider-head">
               <div>
@@ -205,7 +178,12 @@
               </div>
               <a-tag class="active-tag">{{ contextLabel(limits.contextWindow) }}</a-tag>
             </div>
-            <div class="slider-rail">
+            <div
+              class="slider-rail"
+              ref="ctxRail"
+              @mousedown="(e) => startDrag(e, 'context')"
+              @touchstart.passive="(e) => startDrag(e, 'context')"
+            >
               <span
                 v-for="(p, i) in LIMIT_PRESETS"
                 :key="`ctx-tick-${p.key}`"
@@ -214,7 +192,9 @@
                 :title="p.name + ' - ' + p.label"
               />
               <div class="slider-fill" :style="{ width: fillPercent + '%' }" />
-              <div class="slider-thumb" :style="{ left: fillPercent + '%' }" />
+              <div class="slider-thumb" :style="{ left: fillPercent + '%' }">
+                <span class="thumb-tip">{{ contextLabel(limits.contextWindow) }}</span>
+              </div>
             </div>
             <div class="slider-stops">
               <button
@@ -232,38 +212,34 @@
             </div>
           </div>
 
+          <!-- Auto Compact Limit Slider - Percentage based, follows Context window -->
           <div class="slider-block">
             <div class="slider-head">
               <div>
                 <div class="slider-label">Auto compact limit</div>
-                <div class="slider-value mono">{{ contextLabel(limits.compactLimit) }}<span class="muted-3"> tokens</span></div>
+                <div class="slider-value mono">{{ compactRatio }}%<span class="muted-3"> of {{ contextLabel(limits.contextWindow) }}</span></div>
               </div>
-              <a-tag class="active-tag compact-tag">~{{ compactPercent }}%</a-tag>
+              <a-tag class="active-tag compact-tag">≈ {{ contextLabel(compactTokens) }} tokens</a-tag>
             </div>
-            <div class="slider-rail">
+            <div
+              class="slider-rail"
+              ref="ratioRail"
+              @mousedown="(e) => startDrag(e, 'ratio')"
+              @touchstart.passive="(e) => startDrag(e, 'ratio')"
+            >
               <span
-                v-for="(p, i) in LIMIT_PRESETS"
-                :key="`cmp-tick-${p.key}`"
+                v-for="t in RATIO_TICKS"
+                :key="`ratio-tick-${t}`"
                 class="slider-tick"
-                :style="{ left: tickLeft(i) + '%' }"
+                :style="{ left: t + '%' }"
+                :title="t + '%'"
               />
-              <div class="slider-fill compact" :style="{ width: compactFillPercent + '%' }" />
-              <div class="slider-thumb" :style="{ left: compactFillPercent + '%' }" />
+              <div class="slider-fill compact" :style="{ width: compactRatio + '%' }" />
+              <div class="slider-thumb" :style="{ left: compactRatio + '%' }">
+                <span class="thumb-tip">{{ compactRatio }}%</span>
+              </div>
             </div>
-            <div class="slider-stops">
-              <button
-                v-for="p in LIMIT_PRESETS"
-                :key="`cmp-${p.key}`"
-                type="button"
-                class="slider-stop"
-                :class="{ active: limits.compactLimit === p.compact }"
-                @click="applyCompactPreset(p.key)"
-              >
-                <span class="stop-dot" :style="{ background: p.color }" />
-                <span class="stop-name">@ {{ Math.round((p.compact / p.context) * 100) }}%</span>
-                <span class="stop-label mono">{{ p.compactLabel }}</span>
-              </button>
-            </div>
+            <!-- No quick selection buttons - removed as requested -->
           </div>
         </div>
       </a-tab-pane>
@@ -293,14 +269,13 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, ref, computed, onMounted, watch } from "vue"
+import { reactive, ref, computed, onMounted, onUnmounted } from "vue"
 import {
   LeftOutlined,
   PlusOutlined,
   SaveOutlined,
   SyncOutlined,
   ReloadOutlined,
-  ClearOutlined,
   CloseCircleFilled,
   ApiOutlined,
   MessageOutlined,
@@ -338,39 +313,39 @@ const PRESETS: Array<{
     key: "anthropic",
     name: "Anthropic",
     tag: "/v1/messages",
-    desc: "Anthropic Messages protocol. Use when the upstream is a Claude-class API.",
+    desc: "Anthropic Messages protocol.",
     baseUrl: "https://api.anthropic.com",
     color: "linear-gradient(135deg, #d97757, #b6553a)",
     icon: MessageOutlined,
-    values: { wireApi: "anthropic", baseUrl: "https://api.anthropic.com", model: "MiniMax-M3", apiKeyHeader: "X-Api-Key" },
+    values: { wireApi: "anthropic", apiKeyHeader: "X-Api-Key" },
   },
   {
-    key: "openai",
-    name: "OpenAI",
+    key: "chat_completions",
+    name: "OpenAI Chat",
     tag: "/v1/chat/completions",
-    desc: "Standard Chat Completions. Use for OpenAI, OpenRouter, and most OpenAI-compatible hosts.",
+    desc: "Standard Chat Completions.",
     baseUrl: "https://api.openai.com/v1",
     color: "linear-gradient(135deg, #10a37f, #0d8a6b)",
     icon: ApiOutlined,
-    values: { wireApi: "chat_completions", baseUrl: "https://api.openai.com/v1", model: "gpt-4.1", apiKeyHeader: "Authorization" },
+    values: { wireApi: "chat_completions", apiKeyHeader: "Authorization" },
   },
   {
-    key: "responses",
+    key: "openai",
     name: "OpenAI Responses",
     tag: "/responses",
-    desc: "OpenAI Responses protocol (newer). Use for /v1/responses-shaped upstreams.",
+    desc: "OpenAI Responses protocol.",
     baseUrl: "https://api.openai.com/v1",
     color: "linear-gradient(135deg, #6366f1, #4338ca)",
     icon: RocketOutlined,
-    values: { wireApi: "openai", baseUrl: "https://api.openai.com/v1", model: "gpt-4.1", apiKeyHeader: "Authorization" },
+    values: { wireApi: "openai", apiKeyHeader: "Authorization" },
   },
 ]
 
 const LIMIT_PRESETS = [
-  { key: "128k",  name: "Small",    label: "128K",  contextLabel: "128K",  compactLabel: "112K", context: 128_000,  compact: 112_000,  color: "#34d399", icon: ThunderboltOutlined },
-  { key: "256k",  name: "Standard", label: "256K",  contextLabel: "256K",  compactLabel: "220K", context: 256_000,  compact: 220_000,  color: "#60a5fa", icon: RocketOutlined },
-  { key: "512k",  name: "Large",    label: "512K",  contextLabel: "512K",  compactLabel: "460K", context: 512_000,  compact: 460_000,  color: "#a78bfa", icon: FireOutlined },
-  { key: "1m",    name: "Huge",     label: "1M",    contextLabel: "1M",    compactLabel: "900K", context: 1_000_000, compact: 900_000, color: "#f472b6", icon: FireOutlined },
+  { key: "128k",  name: "Small",    label: "128K",  context: 128_000,  compact: 112_000,  color: "#34d399" },
+  { key: "256k",  name: "Standard", label: "256K",  context: 256_000,  compact: 220_000,  color: "#60a5fa" },
+  { key: "512k",  name: "Large",    label: "512K",  context: 512_000,  compact: 460_000,  color: "#a78bfa" },
+  { key: "1m",    name: "Huge",     label: "1M",    context: 1_000_000, compact: 900_000, color: "#f472b6" },
 ]
 
 const CONTEXT_MIN = 64_000
@@ -378,13 +353,15 @@ const CONTEXT_MAX = 1_048_576
 const DEFAULT_CONTEXT_WINDOW = 256_000
 const DEFAULT_COMPACT_LIMIT = 220_000
 
+const RATIO_TICKS = [10, 25, 50, 75, 90]
+
 const activeKey = ref("provider")
 const providerIds = ref<string[]>([])
 const newProviderName = ref("")
 const saving = ref(false)
 const msg = reactive({ text: "", type: "success" as "success" | "error" | "warning" })
 
-// Each provider keeps its own fields, so switching doesn't lose data.
+// Each provider keeps its own fields
 const providers = reactive<Record<string, Provider>>({})
 const limits = reactive<Limits>({
   contextWindow: DEFAULT_CONTEXT_WINDOW,
@@ -392,7 +369,7 @@ const limits = reactive<Limits>({
 })
 const activeId = ref("")
 
-// The form always mirrors the active provider (or empty when none is active).
+// Form state
 const formState = reactive<Provider>({
   providerId: "",
   wireApi: "anthropic",
@@ -402,10 +379,148 @@ const formState = reactive<Provider>({
   apiKeyHeader: "X-Api-Key",
 })
 
+// Wire API switch state - bidirectional sync
+const activePresetKey = ref<string>("anthropic")
+const wireOptions = computed(() =>
+  PRESETS.map((p) => ({ value: p.key, label: p.name })),
+)
+
+// Bidirectional sync functions
+function onWireApiChange(key: string | number) {
+  const preset = PRESETS.find((p) => p.key === key)
+  if (!preset) return
+  if (preset.values.wireApi) formState.wireApi = preset.values.wireApi
+  if (preset.values.apiKeyHeader) formState.apiKeyHeader = preset.values.apiKeyHeader
+  if (activeId.value) providers[activeId.value] = { ...formState, providerId: activeId.value }
+}
+
+function onWireApiSelectChange() {
+  // Sync the segmented switch when select changes
+  const matchingPreset = PRESETS.find((p) => p.values.wireApi === formState.wireApi)
+  if (matchingPreset && matchingPreset.key !== activePresetKey.value) {
+    activePresetKey.value = matchingPreset.key
+  }
+}
+
+// Slider drag handling
+const ctxRail = ref<HTMLElement | null>(null)
+const ratioRail = ref<HTMLElement | null>(null)
+let dragging: 'context' | 'ratio' | null = null
+let onMove: ((e: MouseEvent | TouchEvent) => void) | null = null
+let onUp: (() => void) | null = null
+
+function railPercent(rail: HTMLElement, clientX: number): number {
+  const rect = rail.getBoundingClientRect()
+  const x = clientX - rect.left
+  return Math.min(100, Math.max(0, (x / rect.width) * 100))
+}
+
+function applyDrag(target: 'context' | 'ratio', clientX: number) {
+  if (target === 'context') {
+    const rail = ctxRail.value
+    if (!rail) return
+    const pct = railPercent(rail, clientX)
+    let snapped: number | null = null
+    for (const p of LIMIT_PRESETS) {
+      const pp = ((p.context - CONTEXT_MIN) / (CONTEXT_MAX - CONTEXT_MIN)) * 100
+      if (Math.abs(pp - pct) < 6) { snapped = p.context; break }
+    }
+    if (snapped == null) {
+      const newValue = CONTEXT_MIN + (CONTEXT_MAX - CONTEXT_MIN) * (pct / 100)
+      setContextWindow(newValue)
+    } else {
+      setContextWindow(snapped)
+    }
+  } else {
+    const rail = ratioRail.value
+    if (!rail) return
+    const pct = railPercent(rail, clientX)
+    setCompactRatio(pct)
+  }
+}
+
+function setContextWindow(value: number) {
+  const prev = limits.contextWindow
+  const next = Math.min(CONTEXT_MAX, Math.max(CONTEXT_MIN, Math.round(value)))
+  limits.contextWindow = next
+  // Auto-set compact to 80% of new context window
+  limits.compactLimit = Math.round(next * 0.8)
+}
+
+function setCompactRatio(percent: number) {
+  const p = Math.min(100, Math.max(0, percent))
+  limits.compactLimit = Math.round(limits.contextWindow * p / 100)
+}
+
+function startDrag(e: MouseEvent | TouchEvent, target: 'context' | 'ratio') {
+  const clientX = 'touches' in e ? e.touches[0].clientX : (e as MouseEvent).clientX
+  applyDrag(target, clientX)
+  dragging = target
+  onMove = (ev: MouseEvent | TouchEvent) => {
+    if (!dragging) return
+    const x = 'touches' in ev ? ev.touches[0].clientX : (ev as MouseEvent).clientX
+    applyDrag(dragging, x)
+  }
+  onUp = () => stopDrag()
+  window.addEventListener('mousemove', onMove as any)
+  window.addEventListener('touchmove', onMove as any, { passive: true } as any)
+  window.addEventListener('mouseup', onUp)
+  window.addEventListener('touchend', onUp)
+}
+
+function stopDrag() {
+  dragging = null
+  if (onMove) {
+    window.removeEventListener('mousemove', onMove as any)
+    window.removeEventListener('touchmove', onMove as any)
+  }
+  if (onUp) {
+    window.removeEventListener('mouseup', onUp)
+    window.removeEventListener('touchend', onUp)
+  }
+  onMove = null
+  onUp = null
+}
+
+onUnmounted(stopDrag)
+
+// Computed values for limits display
+const compactRatio = computed(() => {
+  if (!limits.contextWindow) return 0
+  return Math.round((limits.compactLimit / limits.contextWindow) * 1000) / 10
+})
+const compactTokens = computed(() => Math.round(limits.contextWindow * compactRatio.value / 100))
+const fillPercent = computed(() => {
+  const v = Math.min(CONTEXT_MAX, Math.max(CONTEXT_MIN, limits.contextWindow || CONTEXT_MIN))
+  return Math.round(((v - CONTEXT_MIN) / (CONTEXT_MAX - CONTEXT_MIN)) * 100)
+})
+
+function contextLabel(n: number) {
+  if (!n) return "0"
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1).replace(/\.0$/, "") + "M"
+  if (n >= 1_000) return Math.round(n / 1_000) + "K"
+  return String(n)
+}
+
+function tickLeft(i: number) {
+  const p = LIMIT_PRESETS[i]
+  const v = Math.min(CONTEXT_MAX, Math.max(CONTEXT_MIN, p.context))
+  return Math.round(((v - CONTEXT_MIN) / (CONTEXT_MAX - CONTEXT_MIN)) * 100)
+}
+
+function applyLimitPreset(key: string) {
+  const p = LIMIT_PRESETS.find((x) => x.key === key)
+  if (!p) return
+  limits.contextWindow = p.context
+  limits.compactLimit = p.compact
+}
+
+// Provider management functions
 function snapshotActive() {
   if (!activeId.value) return
   providers[activeId.value] = { ...formState, providerId: activeId.value }
 }
+
 function loadActiveIntoForm() {
   const id = activeId.value
   if (!id || !providers[id]) {
@@ -413,6 +528,9 @@ function loadActiveIntoForm() {
     return
   }
   Object.assign(formState, providers[id])
+  // Sync the segmented switch
+  const matchingPreset = PRESETS.find((p) => p.values.wireApi === formState.wireApi)
+  if (matchingPreset) activePresetKey.value = matchingPreset.key
 }
 
 function setActive(id: string) {
@@ -449,13 +567,6 @@ function removeProvider(id: string) {
   }
 }
 
-function applyPreset(key: string) {
-  const preset = PRESETS.find((p) => p.key === key)
-  if (!preset) return
-  Object.assign(formState, preset.values)
-  if (activeId.value) providers[activeId.value] = { ...formState, providerId: activeId.value }
-}
-
 function resetForm() {
   formState.model = ""
   formState.baseUrl = ""
@@ -463,47 +574,8 @@ function resetForm() {
   formState.wireApi = "anthropic"
   formState.apiKeyHeader = "X-Api-Key"
   if (activeId.value) providers[activeId.value] = { ...formState, providerId: activeId.value }
-}
-
-function applyLimitPreset(key: string) {
-  const p = LIMIT_PRESETS.find((x) => x.key === key)
-  if (!p) return
-  limits.contextWindow = p.context
-  limits.compactLimit = p.compact
-}
-
-function applyCompactPreset(key: string) {
-  const p = LIMIT_PRESETS.find((x) => x.key === key)
-  if (!p) return
-  limits.compactLimit = p.compact
-}
-
-function contextLabel(n: number) {
-  if (!n) return "0"
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1).replace(/\.0$/, "") + "M"
-  if (n >= 1_000) return Math.round(n / 1_000) + "K"
-  return String(n)
-}
-
-const fillPercent = computed(() => {
-  const v = Math.min(CONTEXT_MAX, Math.max(CONTEXT_MIN, limits.contextWindow || CONTEXT_MIN))
-  return Math.round(((v - CONTEXT_MIN) / (CONTEXT_MAX - CONTEXT_MIN)) * 100)
-})
-
-const compactFillPercent = computed(() => {
-  const v = Math.min(CONTEXT_MAX, Math.max(CONTEXT_MIN, limits.compactLimit || CONTEXT_MIN))
-  return Math.round(((v - CONTEXT_MIN) / (CONTEXT_MAX - CONTEXT_MIN)) * 100)
-})
-
-const compactPercent = computed(() => {
-  if (!limits.contextWindow) return 0
-  return Math.round((limits.compactLimit / limits.contextWindow) * 100)
-})
-
-function tickLeft(i: number) {
-  const p = LIMIT_PRESETS[i]
-  const v = Math.min(CONTEXT_MAX, Math.max(CONTEXT_MIN, p.context))
-  return Math.round(((v - CONTEXT_MIN) / (CONTEXT_MAX - CONTEXT_MIN)) * 100)
+  const matchingPreset = PRESETS.find((p) => p.values.wireApi === formState.wireApi)
+  if (matchingPreset) activePresetKey.value = matchingPreset.key
 }
 
 function parseConfig(text: string) {
@@ -555,7 +627,7 @@ function parseConfig(text: string) {
       else if (trimmed.startsWith("base_url = ")) p.baseUrl = trimmed.replace("base_url = ", "").replace(/"/g, "")
       else if (trimmed.startsWith("model = ")) p.model = trimmed.replace("model = ", "").replace(/"/g, "")
       else if (trimmed.startsWith("api_key = ")) p.apiKey = trimmed.replace("api_key = ", "").replace(/"/g, "")
-      else if (trimmed.startsWith("api_key_header = ")) p.apiKeyHeader = trimmed.replace("api_key_header = ", "").replace(/"/g, "")
+      else if (trimmed.startsWith("api_key_header = ")) p.apiKeyHeader = trimmed.replace("api_key_header = \"", "").replace(/"/g, "")
     }
   }
 
@@ -659,9 +731,6 @@ onMounted(async () => {
     parseConfig(text)
   } catch {}
 })
-
-// Keep formState synced when limits form changes indirectly (we expose only via presets, but be safe).
-watch(() => limits.contextWindow, () => {})
 </script>
 
 <style scoped>
@@ -738,38 +807,8 @@ watch(() => limits.contextWindow, () => {})
 .chip-x:hover { color: var(--err); }
 .add-chip { background: transparent; border-style: dashed; padding: 4px 6px 4px 8px; gap: 6px; }
 .add-chip :deep(.ant-input) { background: transparent; }
-.add-chip :deep(.ant-input-affix-wrapper) { background: transparent; }
 
-/* Preset list */
-.preset-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
-.preset-card {
-  display: flex; flex-direction: column; gap: 8px;
-  text-align: left;
-  padding: 14px 16px;
-  border-radius: var(--r-md);
-  background: var(--bg-elev-2);
-  border: 1px solid var(--border);
-  color: var(--text-1);
-  cursor: pointer;
-  transition: border-color .15s ease, transform .15s ease, background .15s ease;
-}
-.preset-card:hover { border-color: var(--border-strong); transform: translateY(-1px); }
-.preset-card.ghost { background: transparent; border-style: dashed; }
-.preset-head { display: flex; align-items: center; gap: 10px; }
-.preset-logo {
-  width: 32px; height: 32px; border-radius: 9px;
-  display: grid; place-items: center;
-  color: white; font-size: 14px;
-  flex-shrink: 0;
-}
-.preset-meta { display: flex; flex-direction: column; min-width: 0; }
-.preset-name { font-size: 13.5px; font-weight: 600; }
-.preset-tag { font-size: 11px; color: var(--text-3); }
-.preset-desc { font-size: 12.5px; line-height: 1.5; }
-.preset-foot { font-size: 11.5px; }
-.preset-foot code { color: var(--text-3); }
-
-/* Slider */
+/* Slider styles */
 .slider-block { display: flex; flex-direction: column; gap: 12px; }
 .slider-head {
   display: flex; align-items: flex-end; justify-content: space-between;
@@ -778,32 +817,59 @@ watch(() => limits.contextWindow, () => {})
 .slider-label { font-size: 12.5px; color: var(--text-3); margin-bottom: 2px; }
 .slider-value { font-size: 22px; font-weight: 700; color: var(--text-1); }
 .compact-tag { color: var(--text-2); }
+
 .slider-rail {
   position: relative;
-  height: 8px;
+  height: 12px;
   border-radius: 999px;
   background: linear-gradient(90deg, var(--bg-elev-3), var(--bg-elev-2));
   border: 1px solid var(--border);
-  margin: 18px 6px 8px;
+  margin: 22px 6px 12px;
+  cursor: pointer;
+  user-select: none;
+  touch-action: none;
 }
 .slider-fill {
   position: absolute; left: 0; top: 0; bottom: 0;
   background: linear-gradient(90deg, #4d7dff, #8b5cf6);
   border-radius: 999px;
   box-shadow: 0 0 12px rgba(77,125,255,0.45);
-  transition: width .2s ease;
+  transition: width .08s linear;
 }
 .slider-fill.compact { background: linear-gradient(90deg, #34d399, #22d3ee); box-shadow: 0 0 10px rgba(52,211,153,0.35); }
 .slider-thumb {
   position: absolute; top: 50%;
-  width: 18px; height: 18px;
+  width: 22px; height: 22px;
   border-radius: 50%;
   background: white;
   border: 3px solid #4d7dff;
   transform: translate(-50%, -50%);
   box-shadow: 0 4px 14px rgba(77,125,255,0.55);
-  transition: left .2s ease;
+  cursor: grab;
+  transition: left .08s linear, box-shadow .15s ease, transform .15s ease;
+  z-index: 2;
 }
+.slider-thumb:hover { box-shadow: 0 6px 18px rgba(77,125,255,0.65); }
+.slider-thumb:active { cursor: grabbing; transform: translate(-50%, -50%) scale(1.08); }
+.thumb-tip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--bg-elev-3);
+  border: 1px solid var(--border-strong);
+  color: var(--text-1);
+  font-size: 11px;
+  white-space: nowrap;
+  font-weight: 600;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .15s ease;
+}
+.slider-thumb:hover .thumb-tip,
+.slider-thumb:active .thumb-tip { opacity: 1; }
 .slider-tick {
   position: absolute; top: -4px;
   width: 2px; height: 16px;
