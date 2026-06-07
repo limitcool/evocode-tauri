@@ -194,36 +194,31 @@ async fn write_config(content: String) -> Result<(), String> {
     tokio::fs::write(&config_path, content).await.map_err(|e| e.to_string())
 }
 
+
+
 #[tauri::command]
 async fn sync_to_codex(
-    provider_id: String,
-    model: String,
     base_url: String,
-    _api_key: String,
-    _api_key_header: String,
-    _wire_api: String,
 ) -> Result<(), String> {
-    use evocode_config::{EvocodeConfig, ProviderConfig};
+    // The Tauri GUI maintains the full multi-provider config in
+    // ~/.evocode/config.toml (parsed by serde via EvocodeConfig). Sync to
+    // Codex should:
+    //   1) Load the full EvocodeConfig so we know the active provider, the
+    //      model limits and every saved provider profile.
+    //   2) Hand off to sync_active_provider_to_codex, which writes the
+    //      four top-level Codex keys + the [model_providers.<active>] block
+    //      and leaves mcp_servers / projects / extra providers intact.
+    //
+    // base_url is the local bridge URL. We keep the bridge URL fixed at
+    // 127.0.0.1:17761, so this argument is reserved for future use.
+    let _ = base_url;
 
+    let config = evocode_config::load_config().map_err(|e| e.to_string())?;
     let codex_home = evocode_config::default_codex_home()
         .map_err(|e| e.to_string())?;
-
-    let provider_config = ProviderConfig {
-        model: Some(model),
-        base_url: Some(base_url),
-        api_key: None,
-        api_key_env: None,
-        api_key_header: None,
-        wire_api: None,
-        models: vec![],
-        tool_use_guidance: None,
-    };
-
-    let mut config = EvocodeConfig::default();
-    config.provider = Some(provider_id.clone());
-    config.providers.insert(provider_id.clone(), provider_config);
-
-    config.setup_codex_home(&codex_home).map_err(|e| e.to_string())
+    config
+        .sync_active_provider_to_codex(&codex_home)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
