@@ -271,9 +271,7 @@ import {
   CloseCircleFilled,
   ApiOutlined,
   MessageOutlined,
-  ThunderboltOutlined,
   RocketOutlined,
-  FireOutlined,
 } from "@ant-design/icons-vue"
 import { readConfig, writeConfig, syncToCodex } from "../api/bridge"
 
@@ -433,7 +431,6 @@ function applyDrag(target: 'context' | 'ratio', clientX: number) {
 }
 
 function setContextWindow(value: number) {
-  const prev = limits.contextWindow
   const next = Math.min(CONTEXT_MAX, Math.max(CONTEXT_MIN, Math.round(value)))
   limits.contextWindow = next
   // Auto-set compact to 80% of new context window
@@ -895,4 +892,5 @@ onMounted(async () => {
   .slider-stops { grid-template-columns: repeat(2, 1fr); }
 }
 </style>
+
 
