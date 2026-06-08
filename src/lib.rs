@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use tauri::State;
 use tokio::sync::Mutex as AsyncMutex;
 use evocode_config::load_config;
-use evocode_proto::{ServerConfig, DEFAULT_BASE_URL};
+use evocode_proto::{ServerConfig};
 
 pub struct BridgeState {
     handle: Arc<AsyncMutex<Option<tokio::task::JoinHandle<()>>>>,
@@ -110,7 +110,7 @@ async fn start_bridge(state: State<'_, BridgeState>) -> Result<String, String> {
     cfg.codex_config_overrides = config.codex_config_overrides();
     cfg.codex_env = config.codex_env();
     cfg.provider = Some(config.selected_provider());
-    cfg.upstream_url = config.base_url().unwrap_or(DEFAULT_BASE_URL).to_string();
+    cfg.upstream_url = config.base_url().expect("base_url is empty ").to_string();
     cfg.api_key = config.api_key().unwrap_or("").to_string();
     cfg.protocol = config.protocol();
 

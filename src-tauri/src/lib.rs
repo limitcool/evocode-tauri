@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 use tauri::State;
 use tokio::sync::Mutex as AsyncMutex;
 use evocode_config::load_config;
-use evocode_proto::{ServerConfig, DEFAULT_BASE_URL};
+use evocode_proto::{ServerConfig};
 
 pub struct BridgeState {
     handle: Arc<AsyncMutex<Option<tokio::task::JoinHandle<()>>>>,
