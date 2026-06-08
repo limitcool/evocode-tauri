@@ -4,37 +4,32 @@
       <div class="hero-content">
         <div class="eyebrow">
           <span class="dot" />
-          <span>Local multi-protocol bridge</span>
+          <span>{{ t("hero.eyebrow") }}</span>
         </div>
         <h1>
          <span class="gradient-text">evocode</span><br />
         </h1>
-        <p class="lead">
-          Point Codex at <code class="mono">http://127.0.0.1:17761</code> and let
-          <span class="gradient-text">evocode</span> handle the wire protocol translation.
-          Start the bridge below to expose <code class="mono">/v1/chat/completions</code>,
-          <code class="mono">/v1/messages</code> and <code class="mono">/responses</code> from one local endpoint.
-        </p>
+        <p class="lead" v-html="t('hero.lead', { url: '<code class=\'mono\'>http://127.0.0.1:17761</code>', name: '<span class=\'gradient-text\'>evocode</span>', c: '<code class=\'mono\'>/v1/chat/completions</code>', m: '<code class=\'mono\'>/v1/messages</code>', r: '<code class=\'mono\'>/responses</code>' })" />
         <div class="hero-cta">
           <a-button type="primary" size="large" class="cta" @click="goConfig">
             <template #icon><SettingOutlined /></template>
-            Configure Provider
+            {{ t("hero.configure") }}
           </a-button>
           <a-button size="large" class="cta-secondary" @click="scrollToLogs">
             <template #icon><CodeOutlined /></template>
-            View Live Logs
+            {{ t("hero.logs") }}
           </a-button>
         </div>
 
         <div class="hero-stats">
           <div class="stat">
             <div class="num mono">17761</div>
-            <div class="lbl">default port</div>
+            <div class="lbl">{{ t("hero.default_port") }}</div>
           </div>
           <div class="sep" />
           <div class="stat">
             <div class="num">v<span class="mono">{{ currentVersion || '0.0.0' }}</span></div>
-            <div class="lbl">bridge version</div>
+            <div class="lbl">{{ t("hero.bridge_version") }}</div>
           </div>
         </div>
       </div>
@@ -72,23 +67,23 @@
         <div class="stat-head">
           <div class="title">
             <span class="bar" />
-            <span>Codex Connection</span>
+            <span>{{ t("codex.title") }}</span>
           </div>
-          <a-tag v-if="bridgeStatus === 'running'" class="ver ok">Live</a-tag>
-          <a-tag v-else class="ver off">Idle</a-tag>
+          <a-tag v-if="bridgeStatus === 'running'" class="ver ok">{{ t("codex.live") }}</a-tag>
+          <a-tag v-else class="ver off">{{ t("codex.idle") }}</a-tag>
         </div>
         <div class="kv">
-          <div class="k">Status</div>
+          <div class="k">{{ t("codex.status") }}</div>
           <div class="v" :class="bridgeStatus">
             <span class="dot" /> {{ bridgeStatus }}
           </div>
-          <div class="k">Base URL</div>
+          <div class="k">{{ t("codex.base_url") }}</div>
           <div class="v mono">http://127.0.0.1:17761</div>
-          <div class="k">Catalog</div>
+          <div class="k">{{ t("codex.catalog") }}</div>
           <div class="v mono">~/.codex/evocode-model-catalog.json</div>
-          <div class="k">Provider</div>
+          <div class="k">{{ t("codex.provider") }}</div>
           <div class="v">
-            <router-link to="/config" class="link">Manage in Configuration →</router-link>
+            <router-link to="/config" class="link">{{ t("codex.manage") }}</router-link>
           </div>
         </div>
         <a-button
@@ -97,7 +92,7 @@
           @click="copySnippet"
         >
           <template #icon><CopyOutlined /></template>
-          {{ copied ? 'Copied!' : 'Copy Codex config.toml snippet' }}
+          {{ copied ? t('codex.copied') : t('codex.copy') }}
         </a-button>
       </div>
     </section>
@@ -110,6 +105,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from "vue"
+import { useLocale } from "../composables/useLocale"
 import { useRouter } from "vue-router"
 import { SettingOutlined, CodeOutlined, CopyOutlined } from "@ant-design/icons-vue"
 import { startBridge, stopBridge, getBridgeStatus, readConfig, getAppVersion } from "../api/bridge"
@@ -117,6 +113,7 @@ import BridgeStatus from "../components/BridgeStatus.vue"
 import LogPanel from "../components/LogPanel.vue"
 
 const router = useRouter()
+const { t } = useLocale()
 const bridgeStatus = ref("stopped")
 const loading = ref(false)
 const currentVersion = ref("")

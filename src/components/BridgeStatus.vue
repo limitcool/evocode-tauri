@@ -6,12 +6,12 @@
     </div>
     <div class="meta">
       <div class="label">{{ statusLabel }}</div>
-      <div class="sub">{{ status === 'running' ? 'Serving requests' : status === 'starting' ? 'Booting up...' : 'Idle' }}</div>
+      <div class="sub">{{ status === 'running' ? t('bridge.serving') : status === 'starting' ? t('bridge.booting') : t('bridge.idle') }}</div>
     </div>
     <div class="url mono">
-      <span class="url-label">URL</span>
+      <span class="url-label">{{ t("bridge.url") }}</span>
       <code>http://127.0.0.1:17761</code>
-      <a-tooltip title="Copy">
+      <a-tooltip :title="t('bridge.copy')">
         <CopyOutlined class="copy" @click="copyUrl" />
       </a-tooltip>
     </div>
@@ -28,14 +28,17 @@
         <PoweroffOutlined v-if="status !== 'running'" />
         <PauseOutlined v-else />
       </template>
-      {{ status === 'running' ? 'Stop Bridge' : 'Start Bridge' }}
+      {{ status === 'running' ? t('bridge.stop') : t('bridge.start') }}
     </a-button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useLocale } from '../composables/useLocale'
 import { PoweroffOutlined, PauseOutlined, CopyOutlined } from '@ant-design/icons-vue'
+
+const { t } = useLocale()
 
 const props = defineProps<{
   status: string
@@ -48,10 +51,10 @@ defineEmits<{
 
 const statusLabel = computed(() => {
   switch (props.status) {
-    case 'running': return 'Bridge Online'
-    case 'starting': return 'Starting'
+    case 'running': return t('bridge.online')
+    case 'starting': return t('bridge.starting')
     case 'error': return 'Error'
-    default: return 'Bridge Offline'
+    default: return t('bridge.offline')
   }
 })
 

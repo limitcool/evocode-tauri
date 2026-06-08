@@ -25,11 +25,11 @@
       >
         <a-menu-item key="/">
           <template #icon><HomeOutlined /></template>
-          <span>Dashboard</span>
+          <span>{{ t("dashboard") }}</span>
         </a-menu-item>
         <a-menu-item key="/config">
           <template #icon><SettingOutlined /></template>
-          <span>Configuration</span>
+          <span>{{ t("configuration") }}</span>
         </a-menu-item>
       </a-menu>
 
@@ -38,7 +38,7 @@
           <span class="dot ok" />
           <span>v{{ currentVersion || '0.0.0' }}</span>
         </div>
-        <a-tooltip :title="collapsed ? 'Expand' : 'Collapse'">
+        <a-tooltip :title="collapsed ? t('expand') : t('collapse')">
           <a-button
             type="text"
             class="collapse-btn"
@@ -56,7 +56,7 @@
         <div class="header-left">
           <a-breadcrumb class="crumbs">
             <a-breadcrumb-item>
-              <router-link to="/">Home</router-link>
+              <router-link to="/">{{ t("home") }}</router-link>
             </a-breadcrumb-item>
             <a-breadcrumb-item v-if="route.path !== '/'">
               {{ currentTitle }}
@@ -64,10 +64,15 @@
           </a-breadcrumb>
         </div>
         <div class="header-right">
-          <a-tooltip :title="theme === 'dark' ? 'Switch to light' : 'Switch to dark'">
+          <a-tooltip :title="theme === 'dark' ? t('theme.dark') : t('theme.light')">
             <a-button type="text" class="icon-btn" @click="themeToggle">
               <BulbOutlined v-if="theme === 'dark'" />
               <BulbFilled v-else />
+            </a-button>
+          </a-tooltip>
+          <a-tooltip :title="locale === 'en' ? '\u4e2d\u6587' : 'English'">
+            <a-button type="text" class="icon-btn lang-btn" @click="localeToggle">
+              {{ locale === 'en' ? 'EN' : '\u4e2d\u6587' }}
             </a-button>
           </a-tooltip>
         </div>
@@ -95,6 +100,7 @@ import {
   ThunderboltOutlined,
 } from '@ant-design/icons-vue'
 import { useTheme } from '../composables/useTheme'
+import { useLocale } from '../composables/useLocale'
 import { getAppVersion } from '../api/bridge'
 
 const route = useRoute()
@@ -103,10 +109,11 @@ const collapsed = ref(false)
 const currentVersion = ref('')
 
 const { theme, toggle: themeToggle } = useTheme()
+const { locale, t, toggle: localeToggle } = useLocale()
 
 const titleMap: Record<string, string> = {
-  '/': 'Dashboard',
-  '/config': 'Configuration',
+  '/': t('dashboard'),
+  '/config': t('configuration'),
 }
 const currentTitle = computed(() => titleMap[route.path] || 'Page')
 
@@ -271,6 +278,7 @@ onMounted(async () => {
   border-radius: 10px;
 }
 .icon-btn:hover { color: var(--text-1); background: var(--bg-elev-3); }
+.lang-btn { font-weight: 600; font-size: 13px; letter-spacing: 0.5px; width: auto; padding: 0 8px; }
 
 .app-content {
   padding: 24px 28px 40px;

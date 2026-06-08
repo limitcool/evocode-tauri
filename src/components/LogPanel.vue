@@ -3,21 +3,21 @@
     <div class="log-head">
       <div class="title">
         <span class="bar" />
-        <span>Bridge Logs</span>
+        <span>{{ t("logs.title") }}</span>
         <a-tag :color="statusColor" class="status-tag">{{ statusLabel }}</a-tag>
       </div>
       <div class="actions">
-        <a-tooltip title="Refresh">
+        <a-tooltip :title="t('logs.refresh')">
           <a-button type="text" size="small" class="icon-btn" @click="pollStatus">
             <ReloadOutlined />
           </a-button>
         </a-tooltip>
-        <a-tooltip title="Clear view">
+        <a-tooltip :title="t('logs.clear')">
           <a-button type="text" size="small" class="icon-btn" @click="logLines = []">
             <ClearOutlined />
           </a-button>
         </a-tooltip>
-        <a-tooltip title="Auto-scroll">
+        <a-tooltip :title="t('logs.auto_scroll')">
           <a-switch v-model:checked="autoScroll" size="small" />
         </a-tooltip>
       </div>
@@ -26,8 +26,8 @@
     <div class="log-body" ref="bodyRef">
       <div v-if="logLines.length === 0" class="empty">
         <DatabaseOutlined class="empty-icon" />
-        <div class="empty-title">No logs yet</div>
-        <div class="empty-sub">Bridge is {{ bridgeRunning ? "running" : "stopped" }}.</div>
+        <div class="empty-title">{{ t("logs.empty_title") }}</div>
+        <div class="empty-sub">{{ t("logs.empty_sub", { status: bridgeRunning ? t("logs.running") : t("logs.stopped") }) }}</div>
       </div>
       <div
         v-for="(line, i) in logLines"
@@ -44,12 +44,15 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from "vue"
+import { useLocale } from "../composables/useLocale"
 import {
   ReloadOutlined,
   ClearOutlined,
   DatabaseOutlined,
 } from "@ant-design/icons-vue"
 import { getBridgeStatus, getBridgeLogs } from "../api/bridge"
+
+const { t } = useLocale()
 
 const props = defineProps<{
   bridgeRunning: boolean
@@ -63,10 +66,10 @@ const bodyRef = ref<HTMLElement | null>(null)
 
 const statusLabel = computed(() => {
   switch (status.value) {
-    case "starting": return "Starting"
-    case "running": return "Running"
-    case "error": return "Error"
-    default: return "Stopped"
+    case "starting": return t("logs.label_starting")
+    case "running": return t("logs.label_running")
+    case "error": return t("logs.label_error")
+    default: return t("logs.label_stopped")
   }
 })
 

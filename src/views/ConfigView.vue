@@ -4,30 +4,30 @@
       <div>
         <div class="eyebrow">
           <span class="dot" />
-          <span>Settings</span>
+          <span>{{ t("config.settings") }}</span>
         </div>
-        <h1>Configuration</h1>
-        <p class="muted-3">Pick a provider preset, fill in credentials, save. You can store many providers and switch the active one anytime.</p>
+        <h1>{{ t("config.title") }}</h1>
+        <p class="muted-3">{{ t("config.desc") }}</p>
       </div>
       <div class="head-actions">
         <a-button @click="$router.push('/')" class="ghost">
           <template #icon><LeftOutlined /></template>
-          Back to Dashboard
+          {{ t("config.back") }}
         </a-button>
       </div>
     </header>
 
     <a-tabs v-model:activeKey="activeKey" class="config-tabs fade-up">
       <!-- ============== Connection ============== -->
-      <a-tab-pane key="provider" tab="Connection">
+      <a-tab-pane key="provider" :tab="t('config.tab.connection')">
         <!-- Top: provider chips for switch / add / remove -->
         <div class="glass panel">
           <div class="panel-head">
             <div>
-              <div class="panel-title">Providers</div>
-              <div class="panel-sub muted-3">Add as many as you like. The active one is what the bridge uses.</div>
+              <div class="panel-title">{{ t("config.providers") }}</div>
+              <div class="panel-sub muted-3">{{ t("config.providers.desc") }}</div>
             </div>
-            <a-tag v-if="activeId" class="active-tag">Active: {{ activeId }}</a-tag>
+            <a-tag v-if="activeId" class="active-tag">{{ t("config.providers.active") }} {{ activeId }}</a-tag>
           </div>
 
           <div class="prov-chips">
@@ -42,9 +42,9 @@
               <span class="chip-name">{{ id }}</span>
               <a-popconfirm
                 v-if="providerIds.length > 1"
-                title="Remove this provider?"
-                ok-text="Yes"
-                cancel-text="No"
+                :title="t('config.providers.remove_title')"
+                :ok-text="t('config.providers.ok')"
+                :cancel-text="t('config.providers.cancel')"
                 @confirm.stop="removeProvider(id)"
               >
                 <CloseCircleFilled class="chip-x" @click.stop />
@@ -54,7 +54,7 @@
             <div class="chip add-chip">
               <a-input
                 v-model:value="newProviderName"
-                placeholder="new provider id"
+                :placeholder="t('config.providers.placeholder')"
                 size="small"
                 @press-enter="addProvider"
               />
@@ -70,8 +70,8 @@
         <div class="glass panel">
           <div class="panel-head">
             <div>
-              <div class="panel-title">Wire API</div>
-              <div class="panel-sub muted-3">Choose the protocol. Model and Base URL are filled separately below.</div>
+              <div class="panel-title">{{ t("config.wire_api") }}</div>
+              <div class="panel-sub muted-3">{{ t("config.wire_api.desc") }}</div>
             </div>
           </div>
           <a-segmented
@@ -86,8 +86,8 @@
         <div class="glass panel">
           <div class="panel-head">
             <div>
-              <div class="panel-title">Settings for Provider</div>
-              <div class="panel-sub muted-3">These values are saved under <code class="mono">[providers.{{ activeId || '...' }}]</code>.</div>
+              <div class="panel-title">{{ t("config.form.title") }}</div>
+              <div class="panel-sub muted-3">{{ t("config.form.desc") }} <code class="mono">[providers.{{ activeId || '...' }}]</code>.</div>
             </div>
             <a-button size="small" :disabled="!activeId" @click="resetForm">
               <template #icon><ReloadOutlined /></template>
@@ -97,29 +97,29 @@
 
           <a-empty
             v-if="!activeId"
-            description="Add a provider above to get started."
+            :description="t('config.form.empty')"
             class="empty-block"
           />
 
           <a-form v-else layout="vertical" class="form" :model="formState">
             <a-row :gutter="16">
               <a-col :span="12">
-                <a-form-item label="Model" required>
-                  <a-input v-model:value="formState.model" placeholder="e.g. MiniMax-M3" />
+                <a-form-item :label="t('config.form.model')" required>
+                  <a-input v-model:value="formState.model" :placeholder="t('config.form.model_placeholder')" />
                 </a-form-item>
               </a-col>
               <a-col :span="12">
-                <a-form-item label="Wire API">
-                  <a-tooltip title="Which API protocol this upstream provider speaks">
+                <a-form-item :label="t('config.form.wire_api')">
+                  <a-tooltip :title="t('config.wire_api.tooltip')">
                     <a-select v-model:value="formState.wireApi" @change="onWireApiSelectChange">
                       <a-select-option value="anthropic">
-                        <span class="opt-row"><span class="dot purple" /> Anthropic (/v1/messages)</span>
+                        <span class="opt-row"><span class="dot purple" /> {{ t("config.wire.anthropic") }}</span>
                       </a-select-option>
                       <a-select-option value="chat_completions">
-                        <span class="opt-row"><span class="dot blue" /> Chat Completions (/v1/chat)</span>
+                        <span class="opt-row"><span class="dot blue" /> {{ t("config.wire.chat") }}</span>
                       </a-select-option>
                       <a-select-option value="openai">
-                        <span class="opt-row"><span class="dot cyan" /> OpenAI Responses (/responses)</span>
+                        <span class="opt-row"><span class="dot cyan" /> {{ t("config.wire.openai") }}</span>
                       </a-select-option>
                     </a-select>
                   </a-tooltip>
@@ -127,20 +127,20 @@
               </a-col>
             </a-row>
 
-            <a-form-item label="Base URL" required>
-              <a-input v-model:value="formState.baseUrl" placeholder="https://api.example.com/v1" />
+            <a-form-item :label="t('config.form.base_url')" required>
+              <a-input v-model:value="formState.baseUrl" :placeholder="t('config.form.base_url_placeholder')" />
             </a-form-item>
 
             <a-row :gutter="16">
               <a-col :span="12">
-                <a-form-item label="API Key">
-                  <a-input-password v-model:value="formState.apiKey" placeholder="Your API key" />
+                <a-form-item :label="t('config.form.api_key')">
+                  <a-input-password v-model:value="formState.apiKey" :placeholder="t('config.form.api_key_placeholder')" />
                 </a-form-item>
               </a-col>
               <a-col :span="12">
-                <a-form-item label="API Key Header">
-                  <a-tooltip title="The HTTP header name for the API key, e.g. X-Api-Key or Authorization">
-                    <a-input v-model:value="formState.apiKeyHeader" placeholder="X-Api-Key" />
+                <a-form-item :label="t('config.form.api_key_header')">
+                  <a-tooltip :title="t('config.form.api_key_header_tooltip')">
+                    <a-input v-model:value="formState.apiKeyHeader" :placeholder="t('config.form.api_key_header_placeholder')" />
                   </a-tooltip>
                 </a-form-item>
               </a-col>
@@ -150,12 +150,12 @@
       </a-tab-pane>
 
       <!-- ============== Limits ============== -->
-      <a-tab-pane key="limits" tab="Model limits">
+      <a-tab-pane key="limits" :tab="t('config.tab.limits')">
         <div class="glass panel">
           <div class="panel-head">
             <div>
-              <div class="panel-title">Context & auto-compact</div>
-              <div class="panel-sub muted-3">Drag the sliders or click the preset values.</div>
+              <div class="panel-title">{{ t("config.limits.title") }}</div>
+              <div class="panel-sub muted-3">{{ t("config.limits.desc") }}</div>
             </div>
           </div>
 
@@ -163,8 +163,8 @@
           <div class="slider-block">
             <div class="slider-head">
               <div>
-                <div class="slider-label">Context window</div>
-                <div class="slider-value mono">{{ contextLabel(limits.contextWindow) }}<span class="muted-3"> tokens</span></div>
+                <div class="slider-label">{{ t("config.limits.context") }}</div>
+                <div class="slider-value mono">{{ contextLabel(limits.contextWindow) }}<span class="muted-3"> {{ t("config.limits.tokens") }}</span></div>
               </div>
               <a-tag class="active-tag">{{ contextLabel(limits.contextWindow) }}</a-tag>
             </div>
@@ -179,7 +179,7 @@
                 :key="`ctx-tick-${p.key}`"
                 class="slider-tick"
                 :style="{ left: tickLeft(i) + '%' }"
-                :title="p.name + ' - ' + p.label"
+                :title="t('config.limits.preset_' + p.key) + ' - ' + p.label"
               />
               <div class="slider-fill" :style="{ width: fillPercent + '%' }" />
               <div class="slider-thumb" :style="{ left: fillPercent + '%' }">
@@ -196,7 +196,7 @@
                 @click="applyLimitPreset(p.key)"
               >
                 <span class="stop-dot" :style="{ background: p.color }" />
-                <span class="stop-name">{{ p.name }}</span>
+                <span class="stop-name">{{ t("config.limits.preset_" + p.key) }}</span>
                 <span class="stop-label mono">{{ p.label }}</span>
               </button>
             </div>
@@ -206,10 +206,10 @@
           <div class="slider-block">
             <div class="slider-head">
               <div>
-                <div class="slider-label">Auto compact limit</div>
-                <div class="slider-value mono">{{ compactRatio }}%<span class="muted-3"> of {{ contextLabel(limits.contextWindow) }}</span></div>
+                <div class="slider-label">{{ t("config.limits.compact") }}</div>
+                <div class="slider-value mono">{{ compactRatio }}%<span class="muted-3"> {{ t("config.limits.of") }} {{ contextLabel(limits.contextWindow) }}</span></div>
               </div>
-              <a-tag class="active-tag compact-tag">≈ {{ contextLabel(compactTokens) }} tokens</a-tag>
+              <a-tag class="active-tag compact-tag">≈ {{ contextLabel(compactTokens) }} {{ t("config.limits.tokens") }}</a-tag>
             </div>
             <div
               class="slider-rail"
@@ -260,6 +260,7 @@
 
 <script setup lang="ts">
 import { reactive, ref, computed, onMounted, onUnmounted } from "vue"
+import { useLocale } from "../composables/useLocale"
 import { message } from "ant-design-vue"
 import {
   LeftOutlined,
@@ -345,6 +346,8 @@ const DEFAULT_CONTEXT_WINDOW = 256_000
 const DEFAULT_COMPACT_LIMIT = 220_000
 
 const RATIO_TICKS = [10, 25, 50, 75, 90]
+
+const { t } = useLocale()
 
 const activeKey = ref("provider")
 const providerIds = ref<string[]>([])
