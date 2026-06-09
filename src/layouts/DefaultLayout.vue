@@ -135,7 +135,7 @@ import {
 import { useLocale } from '../composables/useLocale'
 import { message } from 'ant-design-vue'
 import { getAppVersion } from '../api/bridge'
-import { checkUpdate, type CheckUpdateResult } from '../api/check_update'
+import { checkUpdate } from '../api/check_update'
 import { openUrl } from '@tauri-apps/plugin-opener'
 
 const route = useRoute()

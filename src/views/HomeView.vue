@@ -63,7 +63,6 @@ const { t } = useLocale()
 const bridgeStatus = ref("stopped")
 const loading = ref(false)
 const currentVersion = ref("")
-const logsRef = ref<HTMLElement | null>(null)
 const copied = ref(false)
 
 async function updateStatus() {
