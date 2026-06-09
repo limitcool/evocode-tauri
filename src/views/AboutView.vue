@@ -1,46 +1,75 @@
 <template>
   <div class="about-view">
-    <section class="hero glass fade-up">
-      <div class="hero-content">
+    <!-- About evocode -->
+    <section class="card glass fade-up">
+      <div class="card-head">
         <div class="eyebrow">
           <span class="dot" />
-          <span>{{ t("hero.eyebrow") }}</span>
+          <span>{{ t("about.title") }}</span>
         </div>
-        <h1>
-         <span class="gradient-text">evocode</span><br />
-        </h1>
-        <p class="lead" v-html="t('hero.lead', { url: '<code class=\'mono\'>http://127.0.0.1:17761</code>', name: '<span class=\'gradient-text\'>evocode</span>', c: '<code class=\'mono\'>/v1/chat/completions</code>', m: '<code class=\'mono\'>/v1/messages</code>', r: '<code class=\'mono\'>/responses</code>' })" />
+        <p class="card-desc">{{ t("about.desc") }}</p>
+      </div>
 
-        <div class="hero-stats">
-          <div class="stat">
-            <div class="num mono">17761</div>
-            <div class="lbl">{{ t("hero.default_port") }}</div>
-          </div>
-          <div class="sep" />
-          <div class="stat">
-            <div class="num">v<span class="mono">{{ currentVersion || '0.0.0' }}</span></div>
-            <div class="lbl">{{ t("hero.bridge_version") }}</div>
-          </div>
+      <!-- Core Features -->
+      <div class="feature-grid">
+        <div class="feature-item">
+          <ApiOutlined class="feat-icon" />
+          <span class="feat-text">{{ t("about.feat_messages") }}</span>
+        </div>
+        <div class="feature-item">
+          <ApiOutlined class="feat-icon" />
+          <span class="feat-text">{{ t("about.feat_chat") }}</span>
+        </div>
+        <div class="feature-item">
+          <ApiOutlined class="feat-icon" />
+          <span class="feat-text">{{ t("about.feat_responses") }}</span>
+        </div>
+        <div class="feature-item">
+          <CheckCircleOutlined class="feat-icon ok" />
+          <span class="feat-text">{{ t("about.feat_unified") }}</span>
         </div>
       </div>
 
-      <div class="hero-art" aria-hidden="true">
-        <div class="orb orb-a" />
-        <div class="orb orb-b" />
-        <div class="orb orb-c" />
-        <div class="grid-bg" />
-        <div class="card-stack">
-          <div class="mini-card">
-            <span class="kv-key">model_provider</span>
-            <code class="mono">"anthropic"</code>
+      <!-- Technical Info -->
+      <div class="tech-row">
+        <div class="tech-item">
+          <span class="tech-label">{{ t("about.port") }}</span>
+          <code class="tech-value mono">17761</code>
+        </div>
+        <div class="tech-sep" />
+        <div class="tech-item">
+          <span class="tech-label">{{ t("about.version") }}</span>
+          <code class="tech-value mono">v{{ currentVersion || "0.0.0" }}</code>
+        </div>
+      </div>
+    </section>
+
+    <!-- Team -->
+    <section class="card glass fade-up">
+      <div class="card-head">
+        <div class="eyebrow">
+          <span class="dot" />
+          <span>{{ t("about.team") }}</span>
+        </div>
+        <p class="card-desc">{{ t("about.team_desc") }}</p>
+      </div>
+
+      <div class="team-body">
+        <div class="team-info">
+          <TeamOutlined class="team-icon" />
+          <p>{{ t("about.team_what") }}</p>
+        </div>
+        <div class="team-contact">
+          <h3>{{ t("about.contact") }}</h3>
+          <div class="contact-row">
+            <MailOutlined class="contact-icon" />
+            <span class="contact-label">{{ t("about.email") }}:</span>
+            <a href="https://mail.qq.com/cgi-bin/write?to=zhuxiujia@qq.com" target="_blank" class="contact-value">zhuxiujia@qq.com</a>
           </div>
-          <div class="mini-card">
-            <span class="kv-key">base_url</span>
-            <code class="mono">http://127.0.0.1:17761</code>
-          </div>
-          <div class="mini-card">
-            <span class="kv-key">wire_api</span>
-            <code class="mono">"responses"</code>
+          <div class="contact-row">
+            <GithubOutlined class="contact-icon" />
+            <span class="contact-label">GitHub:</span>
+            <a href="https://github.com/zhuxiujia" target="_blank" class="contact-value">github.com/zhuxiujia</a>
           </div>
         </div>
       </div>
@@ -50,7 +79,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from "vue"
-
+import { TeamOutlined, ApiOutlined, CheckCircleOutlined, MailOutlined, GithubOutlined } from "@ant-design/icons-vue"
 import { useLocale } from "../composables/useLocale"
 import { getAppVersion } from "../api/bridge"
 
@@ -68,90 +97,150 @@ onMounted(async () => {
 .about-view {
   max-width: 900px;
   margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
 }
 
-.hero {
-  display: grid;
-  grid-template-columns: 1.2fr 1fr;
-  gap: 20px;
-  padding: 28px 28px;
+.card {
+  padding: 28px;
   border-radius: var(--r-xl);
 }
-.hero-content { display: flex; flex-direction: column; gap: 14px; }
+.card-head { margin-bottom: 20px; }
 .eyebrow {
   display: inline-flex; align-items: center; gap: 8px;
   padding: 4px 10px; border-radius: 999px;
   background: var(--bg-elev-3);
   color: var(--text-3); font-size: 12px; width: max-content;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border); margin-bottom: 10px;
 }
 .eyebrow .dot {
   width: 6px; height: 6px; border-radius: 50%;
   background: var(--ok); box-shadow: 0 0 8px var(--ok);
 }
-.hero h1 {
-  font-size: clamp(26px, 3.6vw, 36px);
-  line-height: 1.15; font-weight: 700; margin: 4px 0 0;
+.card-desc {
+  color: var(--text-3);
+  font-size: 13px;
+  line-height: 1.7;
+  margin: 0;
+  max-width: 68ch;
+}
+
+/* Feature grid */
+.feature-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+.feature-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--r-md);
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+}
+.feat-icon {
+  font-size: 16px;
+  color: var(--brand-300);
+  flex-shrink: 0;
+}
+.feat-icon.ok { color: var(--ok); }
+.feat-text {
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.4;
+}
+
+/* Tech info */
+.tech-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 18px;
+  padding: 12px 18px;
+  border-radius: var(--r-md);
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
+  width: max-content;
+}
+.tech-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tech-label {
+  font-size: 11px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: .8px;
+}
+.tech-value {
+  font-size: 16px;
+  font-weight: 700;
   color: var(--text-1);
 }
-.lead { color: var(--text-3); max-width: 58ch; }
-.lead code { color: var(--brand-300); background: var(--bg-elev-3); padding: 1px 6px; border-radius: 6px; font-size: 12.5px; }
+.tech-sep {
+  width: 1px;
+  height: 28px;
+  background: var(--border);
+}
 
-.hero-stats {
-  display: inline-flex; align-items: center; gap: 18px;
-  margin-top: 6px; padding: 10px 14px; border-radius: var(--r-md);
-  background: var(--bg-elev-2); border: 1px solid var(--border); width: max-content;
+/* Team section */
+.team-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
 }
-.stat { display: flex; flex-direction: column; align-items: flex-start; }
-.stat .num { font-size: 18px; font-weight: 700; color: var(--text-1); }
-.stat .lbl { font-size: 11px; color: var(--text-3); text-transform: uppercase; letter-spacing: .8px; }
-.sep { width: 1px; height: 24px; background: var(--border); }
-
-.hero-art {
-  position: relative; min-height: 220px; border-radius: var(--r-lg);
-  background: linear-gradient(135deg, rgba(77,125,255,0.12), rgba(139,92,246,0.08));
-  border: 1px solid var(--border); overflow: hidden;
+.team-info {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
-.grid-bg {
-  position: absolute; inset: 0;
-  background-image:
-    linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px);
-  background-size: 22px 22px;
-  mask-image: radial-gradient(circle at 60% 50%, black 0%, transparent 70%);
+.team-icon {
+  font-size: 28px;
+  color: var(--brand-300);
 }
-.orb { position: absolute; border-radius: 50%; filter: blur(40px); opacity: .6; }
-.orb-a { width: 180px; height: 180px; background: #4d7dff; top: -40px; right: -20px; }
-.orb-b { width: 140px; height: 140px; background: #8b5cf6; bottom: -30px; left: 10px; }
-.orb-c { width: 100px; height: 100px; background: #22d3ee; top: 30%; left: 40%; opacity: .35; }
-
-.card-stack {
-  position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center;
-  gap: 10px; padding: 18px 22px;
+.team-info p {
+  color: var(--text-3);
+  font-size: 13px;
+  line-height: 1.7;
+  margin: 0;
 }
-.mini-card {
-  display: flex; align-items: center; justify-content: space-between; gap: 12px;
-  padding: 10px 12px; border-radius: 10px;
-  background: var(--bg-glass); border: 1px solid var(--border);
-  backdrop-filter: blur(10px);
-  animation: float 6s ease-in-out infinite;
+.team-contact h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-1);
+  margin-bottom: 12px;
 }
-.mini-card:nth-child(2) { margin-left: 28px; animation-delay: .6s; }
-.mini-card:nth-child(3) { margin-left: 14px; animation-delay: 1.2s; }
-.mini-card .kv-key {
-  font-size: 11px; color: var(--text-3);
-  font-family: "JetBrains Mono", "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
-  text-transform: uppercase; letter-spacing: .8px;
+.contact-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: var(--r-md);
+  background: var(--bg-elev-2);
+  border: 1px solid var(--border);
 }
-.mini-card code { color: var(--text-1); font-size: 12.5px; }
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-4px); }
+.contact-icon {
+  font-size: 14px;
+  color: var(--text-3);
 }
+.contact-label {
+  color: var(--text-3);
+  font-size: 12px;
+}
+.contact-value {
+  color: var(--brand-300);
+  font-size: 13px;
+  font-family: "JetBrains Mono", "SFMono-Regular", ui-monospace, monospace;
+  text-decoration: none;
+}
+.contact-value:hover { text-decoration: underline; }
 
 @media (max-width: 780px) {
-  .hero { grid-template-columns: 1fr; }
-  .hero-art { min-height: 180px; }
+  .feature-grid { grid-template-columns: 1fr; }
+  .team-body { grid-template-columns: 1fr; }
 }
 </style>
-

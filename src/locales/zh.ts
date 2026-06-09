@@ -123,5 +123,25 @@
   "update.modal_current": "当前版本：",
   "update.download": "前往下载",
   "update.modal_skip": "稍后再说",
+
+
+  // About page
+  "about.title": "关于 evocode",
+  "about.desc": "evocode 是一个本地多协议桥接服务，让 Codex CLI 能够通过统一端点同时调用 Anthropic、OpenAI 及兼容 Chat Completions 协议的 AI 提供商。",
+  "about.features": "核心能力",
+  "about.feat_messages": "Anthropic Messages API (/v1/messages)",
+  "about.feat_chat": "Chat Completions API (/v1/chat/completions)",
+  "about.feat_responses": "OpenAI Responses API (/responses)",
+  "about.feat_unified": "统一本地端点，无需切换配置",
+  "about.tech": "技术信息",
+  "about.version": "版本",
+  "about.port": "端口",
+  "about.team": "团队介绍",
+  "about.team_desc": "evocode 由 rbatis ORM 团队开发维护。",
+  "about.team_what": "rbatis 是一个高性能、安全且功能丰富的 Rust ORM 框架，在开源社区广受好评。",
+  "about.contact": "联系我们",
+  "about.email": "电子邮箱",
+  "about.email_val": "zhuxiujia@qq.com",
+
 }
 

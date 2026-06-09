@@ -123,5 +123,25 @@
   "update.modal_current": "Current version:",
   "update.download": "Download",
   "update.modal_skip": "Maybe later",
+
+
+  // About page
+  "about.title": "About evocode",
+  "about.desc": "evocode is a local multi-protocol bridge that lets Codex CLI call Anthropic, OpenAI, and Chat Completions-compatible AI providers through a single unified endpoint.",
+  "about.features": "Core Features",
+  "about.feat_messages": "Anthropic Messages API (/v1/messages)",
+  "about.feat_chat": "Chat Completions API (/v1/chat/completions)",
+  "about.feat_responses": "OpenAI Responses API (/responses)",
+  "about.feat_unified": "Single local endpoint, no config switching needed",
+  "about.tech": "Technical Info",
+  "about.version": "Version",
+  "about.port": "Port",
+  "about.team": "Team",
+  "about.team_desc": "evocode is developed and maintained by the rbatis ORM team.",
+  "about.team_what": "rbatis is a high-performance, safe and feature-rich Rust ORM framework, well received in the open-source community.",
+  "about.contact": "Contact Us",
+  "about.email": "Email",
+  "about.email_val": "zhuxiujia@qq.com",
+
 }
 
