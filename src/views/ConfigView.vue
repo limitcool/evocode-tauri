@@ -41,7 +41,7 @@
               <span class="chip-dot" :class="{ on: id === activeId }" />
               <span class="chip-name">{{ id }}</span>
               <a-popconfirm
-                v-if="providerIds.length > 1"
+                v-if="providerIds.length > 0"
                 :title="t('config.providers.remove_title')"
                 :ok-text="t('config.providers.ok')"
                 :cancel-text="t('config.providers.cancel')"
@@ -892,5 +892,4 @@ onMounted(async () => {
   .slider-stops { grid-template-columns: repeat(2, 1fr); }
 }
 </style>
-
 
