@@ -9,9 +9,6 @@
       class="app-sider"
     >
       <div class="brand" :class="{ collapsed }">
-        <div class="logo">
-          <ThunderboltOutlined />
-        </div>
         <transition name="brand-fade">
           <span v-if="!collapsed" class="brand-text gradient-text">evocode</span>
         </transition>
