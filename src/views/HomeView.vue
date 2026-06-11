@@ -17,10 +17,13 @@
         <span class="bar" />
         <span class="title">{{ t("session.title") }}</span>
         <span class="count">{{ sessionsTotal }} total</span>
+        <div class="search-box">
+          <input v-model="searchQuery" type="text" class="search-input" placeholder="搜索会话..." />
+        </div>
       </div>
       <div class="sessions-grid">
         <div
-          v-for="s in sessions"
+          v-for="s in filteredSessions"
           :key="s.id"
           class="session-card-wrapper"
           @click="openSession(s.id)"
@@ -70,6 +73,7 @@ const sessionsTotal = ref(0)
 const currentPage = ref(0)
 const pageSize = 8
 const { t } = useLocale()
+const searchQuery = ref("")
 
 async function updateStatus() {
   bridgeStatus.value = await getBridgeStatus()
@@ -99,6 +103,15 @@ async function fetchSessions() {
   sessions.value = result.sessions
   sessionsTotal.value = result.total
 }
+
+const filteredSessions = computed(() => {
+  if (!searchQuery.value.trim()) return sessions.value
+  const q = searchQuery.value.toLowerCase()
+  return sessions.value.filter(s =>
+    s.name.toLowerCase().includes(q) ||
+    s.model.toLowerCase().includes(q)
+  )
+})
 
 function nextPage() {
   currentPage.value++
@@ -146,6 +159,27 @@ onMounted(async () => {
   display: grid;
   grid-template-columns: 1.4fr 1fr;
   gap: 16px;
+}
+
+.search-box {
+  margin-left: auto;
+}
+.search-input {
+  background: var(--bg-elev-3);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--text-1);
+  outline: none;
+  width: 180px;
+  transition: border-color .15s;
+}
+.search-input:focus {
+  border-color: var(--brand-400);
+}
+.search-input::placeholder {
+  color: var(--text-4);
 }
 
 .sessions-section {
@@ -207,6 +241,9 @@ onMounted(async () => {
   font-family: "JetBrains Mono", "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
 }
 </style>
+
+
+
 
 
 
