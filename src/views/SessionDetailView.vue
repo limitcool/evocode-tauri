@@ -7,7 +7,7 @@
       </a-button>
       <div class="page-title">
         <span class="bar" />
-        <span>{{ sessionTitle || t("session.detail") }}</span>
+        <span :title="sessionTitle">{{ sessionTitle || t("session.detail") }}</span>
       </div>
     </section>
 
@@ -81,6 +81,12 @@ onMounted(async () => {
   font-weight: 600;
   font-size: 16px;
   color: var(--text-1);
+  min-width: 0;
+}
+.page-title > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .page-title .bar {
   width: 3px; height: 16px; border-radius: 2px;
@@ -117,3 +123,6 @@ onMounted(async () => {
   overflow: auto;
 }
 </style>
+
+
+

@@ -1,4 +1,4 @@
-<template>
+﻿<template>
 
 <div class="home">
     <section class="bridge-section">
@@ -185,6 +185,8 @@ onMounted(async () => {
 }
 .session-card-wrapper {
   cursor: pointer;
+  width: 200px;
+  flex-shrink: 0;
   transition: transform .12s ease, box-shadow .12s ease;
 }
 .session-card-wrapper:hover {
@@ -205,3 +207,7 @@ onMounted(async () => {
   font-family: "JetBrains Mono", "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
 }
 </style>
+
+
+
+

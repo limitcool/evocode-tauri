@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="session-grid-card glass fade-up">
     <!-- Header -->
     <div class="card-head">
@@ -19,7 +19,7 @@
         class="cell"
         :class="cell.cls"
         :style="{ '--d': cell.delay }"
-        :title="`${session.name} · ${((idx + 1) * 10).toLocaleString()}K / ${(session.total * 10).toLocaleString()}K tokens`"
+        :title="`${session.name} 路 ${((idx + 1) * 10).toLocaleString()}K / ${(session.total * 10).toLocaleString()}K tokens`"
       />
     </div>
 
@@ -104,9 +104,7 @@ const gridStyle = computed(() => ({
   display: flex;
   flex-direction: column;
   gap: 6px;
-  min-width: 120px;
-  max-width: 200px;
-  flex: 0 1 auto;
+  width: 200px;
 }
 
 /* Header */
@@ -156,8 +154,6 @@ const gridStyle = computed(() => ({
 /* Cell */
 .cell {
   aspect-ratio: 1;
-  min-width: 6px;
-  max-width: 8px;
   border-radius: 1px;
   background: var(--bg-elev-2);
   border: 1px solid var(--border);
