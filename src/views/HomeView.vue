@@ -10,9 +10,7 @@
       />
     </section>
 
-    <section ref="logsRef" class="logs">
-      <LogPanel :bridge-running="bridgeStatus === 'running'" />
-    </section>
+
 
     <section v-if="sessions.length > 0" class="sessions-section">
       <div class="sessions-header">
@@ -35,7 +33,6 @@ import { startBridge, stopBridge, getBridgeStatus, readConfig, getAppVersion, ge
 import type { SessionInfo } from "../api/bridge"
 import ContextGrid from "../components/ContextGrid.vue"
 import BridgeStatus from "../components/BridgeStatus.vue"
-import LogPanel from "../components/LogPanel.vue"
 
 const router = useRouter()
 const bridgeStatus = ref("stopped")

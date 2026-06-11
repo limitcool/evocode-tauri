@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="bridge-card glass fade-up">
     <div class="ring" :class="status">
       <span class="core" />
@@ -21,30 +21,42 @@
         <CopyOutlined class="copy" @click="copyUrl" />
       </a-tooltip>
     </div>
-    <a-button
-      class="toggle"
-      :type="status === 'running' ? 'default' : 'primary'"
-      :danger="status === 'running'"
-      :loading="loading"
-      size="large"
-      block
-      @click="$emit('toggle')"
-    >
-      <template #icon>
-        <PoweroffOutlined v-if="status !== 'running'" />
-        <PauseOutlined v-else />
-      </template>
-      {{ status === 'running' ? t('bridge.stop') : t('bridge.start') }}
-    </a-button>
+    <div class="btn-row">
+      <a-button
+        class="toggle"
+        :type="status === 'running' ? 'default' : 'primary'"
+        :danger="status === 'running'"
+        :loading="loading"
+        size="large"
+        @click="$emit('toggle')"
+      >
+        <template #icon>
+          <PoweroffOutlined v-if="status !== 'running'" />
+          <PauseOutlined v-else />
+        </template>
+        {{ status === 'running' ? t('bridge.stop') : t('bridge.start') }}
+      </a-button>
+      <a-button
+        class="logs-btn"
+        type="default"
+        size="large"
+        @click="goToLogs"
+      >
+        <template #icon><CodeOutlined /></template>
+        {{ t("logs.title") }}
+      </a-button>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { useLocale } from '../composables/useLocale'
-import { PoweroffOutlined, PauseOutlined, CopyOutlined } from '@ant-design/icons-vue'
+import { PoweroffOutlined, PauseOutlined, CopyOutlined, CodeOutlined } from '@ant-design/icons-vue'
 
 const { t } = useLocale()
+const router = useRouter()
 
 const props = defineProps<{
   status: string
@@ -67,6 +79,10 @@ const statusLabel = computed(() => {
 
 function copyUrl() {
   navigator.clipboard?.writeText('http://127.0.0.1:17761').catch(() => {})
+}
+
+function goToLogs() {
+  router.push('/logs')
 }
 </script>
 
@@ -161,6 +177,17 @@ function copyUrl() {
 .url .copy:hover { color: var(--brand-300); }
 
 .toggle { grid-area: toggle; }
+.btn-row {
+  grid-area: toggle;
+  display: flex;
+  gap: 10px;
+}
+.btn-row .toggle {
+  flex: 1;
+}
+.btn-row .logs-btn {
+  flex-shrink: 0;
+}
 
 @media (max-width: 640px) {
   .bridge-card {

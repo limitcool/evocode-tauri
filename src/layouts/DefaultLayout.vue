@@ -35,6 +35,10 @@
           <template #icon><InfoCircleOutlined /></template>
           <span>{{ t("about") }}</span>
         </a-menu-item>
+        <a-menu-item key="/logs">
+          <template #icon><CodeOutlined /></template>
+          <span>{{ t("logs.title") }}</span>
+        </a-menu-item>
       </a-menu>
 
       <div class="sider-footer">
@@ -131,6 +135,7 @@ import {
   DownloadOutlined,
   ArrowDownOutlined,
   InfoCircleOutlined,
+  CodeOutlined,
 } from '@ant-design/icons-vue'
 import { useLocale } from '../composables/useLocale'
 import { message } from 'ant-design-vue'
