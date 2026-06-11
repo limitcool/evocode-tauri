@@ -143,5 +143,13 @@
   "about.email": "电子邮箱",
   "about.email_val": "zhuxiujia@qq.com",
 
+  // Session
+  "session.title": "会话",
+  "session.detail": "会话详情",
+  "session.back": "返回",
+  "session.model": "模型",
+  "session.tokens": "Token",
+  "session.expand": "展开全部",
+  "session.collapse": "收起全部",
+  "session.empty": "暂无可读内容",
 }
-

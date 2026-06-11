@@ -15,22 +15,48 @@
     <section v-if="sessions.length > 0" class="sessions-section">
       <div class="sessions-header">
         <span class="bar" />
-        <span class="title">Sessions</span>
-        <span class="count">{{ sessions.length }} active</span>
+        <span class="title">{{ t("session.title") }}</span>
+        <span class="count">{{ sessionsTotal }} total</span>
       </div>
       <div class="sessions-grid">
-        <ContextGrid v-for="s in sessions" :key="s.id" :session="s" />
+        <div
+          v-for="s in sessions"
+          :key="s.id"
+          class="session-card-wrapper"
+          @click="openSession(s.id)"
+        >
+          <ContextGrid :session="s" />
+        </div>
+      </div>
+      <div v-if="sessionsTotal > pageSize" class="pagination">
+        <a-button
+          size="small"
+          :disabled="currentPage === 0"
+          @click="prevPage"
+        >
+          <LeftOutlined />
+        </a-button>
+        <span class="page-info">{{ currentPage + 1 }} / {{ totalPages }}</span>
+        <a-button
+          size="small"
+          :disabled="(currentPage + 1) * pageSize >= sessionsTotal"
+          @click="nextPage"
+        >
+          <RightOutlined />
+        </a-button>
       </div>
     </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from "vue"
+import { ref, computed, onMounted } from "vue"
+import { useLocale } from "../composables/useLocale"
 import { useRouter } from "vue-router"
 
 import { startBridge, stopBridge, getBridgeStatus, readConfig, getAppVersion, getSessions } from "../api/bridge"
 import type { SessionInfo } from "../api/bridge"
+import { LeftOutlined, RightOutlined } from "@ant-design/icons-vue"
 import ContextGrid from "../components/ContextGrid.vue"
 import BridgeStatus from "../components/BridgeStatus.vue"
 
@@ -40,6 +66,10 @@ const loading = ref(false)
 const sessions = ref<SessionInfo[]>([])
 const currentVersion = ref("")
 const activeProvider = ref("")
+const sessionsTotal = ref(0)
+const currentPage = ref(0)
+const pageSize = 8
+const { t } = useLocale()
 
 async function updateStatus() {
   bridgeStatus.value = await getBridgeStatus()
@@ -62,6 +92,28 @@ async function toggleBridge() {
   finally { loading.value = false }
 }
 
+const totalPages = computed(() => Math.max(1, Math.ceil(sessionsTotal.value / pageSize)))
+
+async function fetchSessions() {
+  const result = await getSessions(currentPage.value * pageSize, pageSize)
+  sessions.value = result.sessions
+  sessionsTotal.value = result.total
+}
+
+function nextPage() {
+  currentPage.value++
+  fetchSessions()
+}
+
+function prevPage() {
+  currentPage.value--
+  fetchSessions()
+}
+
+function openSession(id: string) {
+  router.push('/session/' + id)
+}
+
 onMounted(async () => {
   await updateStatus()
   currentVersion.value = await getAppVersion()
@@ -79,8 +131,7 @@ onMounted(async () => {
     }
   } catch {}
   try {
-    const result = await getSessions()
-    sessions.value = result
+    await fetchSessions()
   } catch (e) {
     console.error("Failed to fetch sessions:", e)
   }
@@ -131,5 +182,26 @@ onMounted(async () => {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+}
+.session-card-wrapper {
+  cursor: pointer;
+  transition: transform .12s ease, box-shadow .12s ease;
+}
+.session-card-wrapper:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-glow);
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 8px 0;
+}
+.page-info {
+  font-size: 12px;
+  color: var(--text-3);
+  font-family: "JetBrains Mono", "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
 }
 </style>

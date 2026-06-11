@@ -1,4 +1,4 @@
-﻿use std::path::PathBuf;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use serde::Serialize;
 
@@ -274,10 +274,24 @@ pub struct SessionInfo {
     pub model: String,
     pub total: u32,
     pub used: u32,
+    pub rollout_path: String,
+}
+
+#[derive(Serialize)]
+pub struct SessionsResponse {
+    pub sessions: Vec<SessionInfo>,
+    pub total: u32,
+}
+
+#[derive(Serialize)]
+pub struct SessionMessage {
+    pub timestamp: String,
+    pub text: String,
+    pub raw: String,
 }
 
 #[tauri::command]
-async fn get_sessions() -> Result<Vec<SessionInfo>, String> {
+async fn get_sessions(offset: u32, limit: u32) -> Result<SessionsResponse, String> {
     let home = dirs::home_dir().ok_or("Cannot find home directory")?;
     let codex_home = home.join(".codex");
 
@@ -307,7 +321,7 @@ async fn get_sessions() -> Result<Vec<SessionInfo>, String> {
         })
         .ok_or_else(|| "Cannot find state database".to_string())?;
 
-    if !db_path.exists() { return Ok(Vec::new()); }
+    if !db_path.exists() { return Ok(SessionsResponse { sessions: Vec::new(), total: 0 }); }
 
     // Read default context_window from config
     let mut default_cw: u32 = 256_000;
@@ -354,13 +368,24 @@ async fn get_sessions() -> Result<Vec<SessionInfo>, String> {
         .await
         .map_err(|e| format!("DB error: {}", e))?;
 
+    // Get total count
+    let total_row = sqlx::query(
+        "SELECT COUNT(*) as cnt FROM threads WHERE archived = 0 AND title != '' AND tokens_used > 0"
+    )
+    .fetch_one(&pool)
+    .await
+    .map_err(|e| format!("Count error: {}", e))?;
+    let total: u32 = total_row.get("cnt");
+
     let rows = sqlx::query(
-        "SELECT id, title, model, tokens_used
+        "SELECT id, title, model, tokens_used, rollout_path
          FROM threads
          WHERE archived = 0 AND title != '' AND tokens_used > 0
          ORDER BY updated_at DESC
-         LIMIT 8"
+         LIMIT ? OFFSET ?"
     )
+    .bind(limit)
+    .bind(offset)
     .fetch_all(&pool)
     .await
     .map_err(|e| format!("Query error: {}", e))?;
@@ -372,6 +397,7 @@ async fn get_sessions() -> Result<Vec<SessionInfo>, String> {
         let name: String = row.get("title");
         let model: String = row.get("model");
         let tokens: u32 = row.get::<u32, _>("tokens_used");
+        let rollout_path: String = row.get("rollout_path");
         let cw = model_cw(&model, default_cw);
         SessionInfo {
             id,
@@ -379,10 +405,101 @@ async fn get_sessions() -> Result<Vec<SessionInfo>, String> {
             model,
             total: (cw + 9999) / 10000,
             used: std::cmp::min((tokens + 9999) / 10000, (cw + 9999) / 10000),
+            rollout_path,
         }
     }).collect();
 
-    Ok(sessions)
+    Ok(SessionsResponse { sessions, total })
+}
+
+#[tauri::command]
+async fn get_session_content(id: String) -> Result<Vec<SessionMessage>, String> {
+    let home = dirs::home_dir().ok_or("Cannot find home directory")?;
+    let codex_home = home.join(".codex");
+
+    // Find the latest state_*.sqlite file
+    let db_path = std::fs::read_dir(&codex_home)
+        .ok()
+        .and_then(|entries| {
+            let mut best: Option<std::path::PathBuf> = None;
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                    if name.starts_with("state_") && name.ends_with(".sqlite") {
+                        match best {
+                            None => best = Some(path),
+                            Some(ref current) => {
+                                let n_cur = current.file_stem().and_then(|s| s.to_str()).unwrap_or("").trim_start_matches("state_").trim_end_matches(".sqlite").parse::<u32>().unwrap_or(0);
+                                let n_new = name.trim_start_matches("state_").trim_end_matches(".sqlite").parse::<u32>().unwrap_or(0);
+                                if n_new > n_cur {
+                                    best = Some(path);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            best
+        })
+        .ok_or_else(|| "Cannot find state database".to_string())?;
+
+    if !db_path.exists() { return Ok(Vec::new()); }
+
+    use sqlx::sqlite::SqlitePoolOptions;
+    use sqlx::Row;
+
+    let pool = SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect(&format!("sqlite://{}?mode=ro", db_path.display()))
+        .await
+        .map_err(|e| format!("DB error: {}", e))?;
+
+    let row = sqlx::query(
+        "SELECT rollout_path FROM threads WHERE id = ?"
+    )
+    .bind(&id)
+    .fetch_optional(&pool)
+    .await
+    .map_err(|e| format!("Query error: {}", e))?;
+
+    pool.close().await;
+
+    let rollout_path: String = match row {
+        Some(r) => r.get("rollout_path"),
+        None => return Ok(Vec::new()),
+    };
+
+    let path = std::path::Path::new(&rollout_path);
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let content = std::fs::read_to_string(path)
+        .map_err(|e| format!("Read error: {}", e))?;
+
+    let mut messages = Vec::new();
+    for line in content.lines() {
+        let timestamp = serde_json::from_str::<serde_json::Value>(line)
+            .ok()
+            .and_then(|v| v.get("timestamp").and_then(|t| t.as_str()).map(String::from))
+            .unwrap_or_default();
+
+        // Truncate raw line to reasonable length
+        let raw = if line.len() > 2000 {
+            format!("{}... [truncated {} bytes]", &line[..line.floor_char_boundary(2000)], line.len() - 2000)
+        } else {
+            line.to_string()
+        };
+
+        messages.push(SessionMessage { timestamp, text: String::new(), raw });
+    }
+
+    // Take last 50 messages to avoid huge responses
+    if messages.len() > 50 {
+        messages = messages.split_off(messages.len() - 50);
+    }
+
+    Ok(messages)
 }
 
 
@@ -404,6 +521,7 @@ pub fn run() {
             get_app_version,
             check_update,
             get_sessions,
+            get_session_content,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

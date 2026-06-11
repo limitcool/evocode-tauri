@@ -31,13 +31,13 @@
           <template #icon><SettingOutlined /></template>
           <span>{{ t("configuration") }}</span>
         </a-menu-item>
-        <a-menu-item key="/about">
-          <template #icon><InfoCircleOutlined /></template>
-          <span>{{ t("about") }}</span>
-        </a-menu-item>
         <a-menu-item key="/logs">
           <template #icon><CodeOutlined /></template>
           <span>{{ t("logs.title") }}</span>
+        </a-menu-item>
+        <a-menu-item key="/about">
+          <template #icon><InfoCircleOutlined /></template>
+          <span>{{ t("about") }}</span>
         </a-menu-item>
       </a-menu>
 

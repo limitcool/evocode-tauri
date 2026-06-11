@@ -1,4 +1,4 @@
-﻿import { invoke } from '@tauri-apps/api/core'
+import { invoke } from '@tauri-apps/api/core'
 
 export async function startBridge(): Promise<string> {
   return invoke<string>('start_bridge')
@@ -49,8 +49,26 @@ export interface SessionInfo {
   model: string
   total: number
   used: number
+  rollout_path: string
 }
 
-export async function getSessions(): Promise<SessionInfo[]> {
-  return invoke<SessionInfo[]>('get_sessions')
+export interface SessionsResponse {
+  sessions: SessionInfo[]
+  total: number
 }
+
+export interface SessionMessage {
+  timestamp: string
+  text: string
+  raw: string
+}
+
+export async function getSessions(offset: number, limit: number): Promise<SessionsResponse> {
+  return invoke<SessionsResponse>('get_sessions', { offset, limit })
+}
+
+export async function getSessionContent(id: string): Promise<SessionMessage[]> {
+  return invoke<SessionMessage[]>('get_session_content', { id })
+}
+
+

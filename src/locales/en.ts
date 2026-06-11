@@ -143,5 +143,13 @@
   "about.email": "Email",
   "about.email_val": "zhuxiujia@qq.com",
 
+  // Session
+  "session.title": "Sessions",
+  "session.detail": "Session Detail",
+  "session.back": "Back",
+  "session.model": "Model",
+  "session.tokens": "Tokens",
+  "session.expand": "Expand All",
+  "session.collapse": "Collapse All",
+  "session.empty": "No readable content",
 }
-
