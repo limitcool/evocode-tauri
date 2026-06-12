@@ -39,8 +39,17 @@ fn get_config_path() -> Option<PathBuf> {
 }
 
 fn setup_logging(logs: Arc<Mutex<Vec<String>>>) {
+    // Custom timer that prints timestamps in the host's local timezone,
+    // so log lines are no longer fixed to UTC.
+    struct LocalTimer;
+    impl tracing_subscriber::fmt::time::FormatTime for LocalTimer {
+        fn format_time(&self, w: &mut tracing_subscriber::fmt::format::Writer<'_>) -> std::fmt::Result {
+            write!(w, "{}", chrono::Local::now().format("%Y-%m-%dT%H:%M:%S%.3f%z"))
+        }
+    }
     let _ = tracing_subscriber::fmt()
         .with_ansi(false)
+        .with_timer(LocalTimer)
         .with_writer(move || {
             struct W(Arc<Mutex<Vec<String>>>);
             impl std::io::Write for W {
