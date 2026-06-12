@@ -41,6 +41,12 @@ export interface SessionData {
   total: number
   /** used cells */
   used: number
+  /** Exact context window in tokens; preferred over `total * 10000`. */
+  total_tokens?: number
+  /** Exact current window in tokens; preferred over `used * 10000`. */
+  used_tokens?: number
+  /** Session-wide cumulative token usage (survives compacts). */
+  accumulated?: number
   columns?: number
 }
 
@@ -49,14 +55,20 @@ const props = withDefaults(defineProps<{
 }>(), {})
 
 const tokensUsed = computed(() => {
+    // Prefer the exact token count when the backend supplied it; otherwise
+    // fall back to cell * 10K (older builds). Never round the displayed
+    // value back up to the next 10K boundary by recomputing from cells.
+    if (props.session.used_tokens != null) {
+      return props.session.used_tokens.toLocaleString()
+    }
     if (props.session.total === 0) return '0'
-    // Show real token count: each cell = 10K tokens
-    const usedTokens = props.session.used * 10000
-    return usedTokens.toLocaleString()
+    return (props.session.used * 10000).toLocaleString()
   })
 const tokensTotal = computed(() => {
-    const totalTokens = props.session.total * 10000
-    return totalTokens.toLocaleString()
+    if (props.session.total_tokens != null) {
+      return props.session.total_tokens.toLocaleString()
+    }
+    return (props.session.total * 10000).toLocaleString()
   })
 
 // Auto-calculate columns for a visually balanced grid

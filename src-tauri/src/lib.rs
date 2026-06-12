@@ -465,10 +465,21 @@ pub struct SessionInfo {
     pub id: String,
     pub name: String,
     pub model: String,
-    /// Recent window usage in 10K-token cells (last_token_usage / 10000, capped at context window).
+    /// Context window size in 10K-token cells (model_context_window / 10000). The card denominator.
     pub total: u32,
-    /// Context window size in 10K-token cells (model_context_window / 10000).
+    /// Current uncompressed window in 10K-token cells (last_token_usage / 10000, capped at context window). The card numerator.
     pub used: u32,
+    /// Exact context window in tokens (model_context_window). Used for the
+    /// precise token-count text on the card; the `total` cell field is
+    /// rounded up to 10K-cell granularity and can over-report by up to
+    /// 10K tokens, so the UI must NOT recompute it as `total * 10000`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub total_tokens: Option<u64>,
+    /// Exact current window in tokens (last_token_usage.total_tokens). Same
+    /// reason as `total_tokens`: `used * 10000` would round the displayed
+    /// number up to the next 10K boundary.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub used_tokens: Option<u64>,
     /// Whole-session accumulated tokens (survives multiple compact events).
     /// u64 because long-lived sessions can easily exceed u32::MAX.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -480,56 +491,153 @@ pub struct SessionInfo {
 /// Returns (recent_window_tokens, accumulated_tokens, model_context_window).
 ///
 /// The rollout file records `token_count` events emitted by Codex, each containing
-/// both `total_token_usage` (cumulative across the whole session) and
-/// `last_token_usage` (the current uncompressed window). The card grid should
-/// display `last_token_usage / model_context_window`, NOT the cumulative total,
-/// otherwise long-lived sessions that have been compacted many times show
-/// percentages far above 100%.
+/// `total_token_usage` (cumulative across the whole session, keeps growing
+/// across compacts) and `last_token_usage` (the current uncompressed window
+/// AFTER the latest compact). The card grid MUST show
+/// `last_token_usage / model_context_window`, never the cumulative, otherwise
+/// long-lived sessions that have been compacted many times report percentages
+/// far above 100% even though the live context is mostly empty.
 fn read_last_token_info(path: &std::path::Path) -> Option<(u64, u64, u32)> {
-    use std::io::{Read, Seek, SeekFrom};
+    use std::io::{Seek, SeekFrom};
     let mut f = std::fs::File::open(path).ok()?;
     let len = f.metadata().ok()?.len();
     if len == 0 {
         return None;
     }
-    // Read the last 1 MiB; this comfortably contains the most recent
-    // `token_count` event even for very chatty sessions.
+    // Scan the file from the end in reverse-line chunks until we locate the
+    // most recent `token_count` event. We must NOT just take the first
+    // successfully-parsed line in the tail: if a more recent line happens to
+    // fail to parse (truncated, non-UTF-8 byte, schema change) we would
+    // silently fall back to a stale value. Files can be tens of MiB for
+    // long-running sessions, so we walk back in bounded chunks instead of
+    // slurping the whole file.
     const CHUNK: u64 = 1024 * 1024;
-    let chunk = len.min(CHUNK);
-    f.seek(SeekFrom::End(-(chunk as i64))).ok()?;
-    let mut buf = Vec::with_capacity(chunk as usize);
-    f.take(chunk).read_to_end(&mut buf).ok()?;
-    let text = std::str::from_utf8(&buf).ok()?;
-    for line in text.lines().rev() {
-        let Some(start) = line.find("\"token_count\"") else {
-            continue;
+    let mut pos: u64 = len;
+    let mut tail: Vec<u8> = Vec::new();
+    loop {
+        let take = pos.min(CHUNK);
+        if take == 0 {
+            break;
+        }
+        pos -= take;
+        // Seek the original file each iteration. We use `seek` +
+        // `read_to_end` rather than `Read::take`, because `take` consumes
+        // the file handle and we need it on the next loop iteration.
+        if f.seek(SeekFrom::Start(pos)).is_err() {
+            break;
+        }
+        let mut buf = Vec::with_capacity(take as usize);
+        use std::io::Read as _;
+        if f.by_ref().take(take).read_to_end(&mut buf).is_err() {
+            break;
+        }
+        // Concatenate this chunk in front of what we already buffered so the
+        // resulting buffer stays in original file order.
+        let mut combined = Vec::with_capacity(buf.len() + tail.len());
+        combined.extend_from_slice(&buf);
+        combined.extend_from_slice(&tail);
+        tail = combined;
+        // Skip a partial first line of this chunk: it continues into the
+        // previous chunk, so we can't safely parse it on its own.
+        let scan_start = if pos > 0 {
+            match tail.iter().position(|b| *b == b'\n') {
+                Some(idx) => idx + 1,
+                None => continue,
+            }
+        } else {
+            0
         };
-        // Cheap guard: only attempt to parse lines that look like the event_msg
-        // wrapper. Other matches (e.g. nested types) are ignored.
-        if !line.contains("\"event_msg\"") {
+        // Compute the slice of `tail` we will actually scan, dealing with
+        // possibly non-UTF-8 bytes from a truncated/killed write.
+        let scan_end: usize = match std::str::from_utf8(&tail[scan_start..]) {
+            Ok(_) => tail.len(),
+            Err(e) => scan_start + e.valid_up_to(),
+        };
+        if scan_end <= scan_start {
+            // No usable UTF-8 in this tail at all; drop it and rewind.
+            tail.truncate(scan_start);
+            if pos == 0 {
+                break;
+            }
             continue;
         }
-        let _ = start; // hint to reader that we located the marker
-        let v = match serde_json::from_str::<serde_json::Value>(line) {
-            Ok(v) => v,
-            Err(_) => continue,
+        // We may have just trimmed garbage off the end. Reflect that in
+        // `tail` so the next iteration starts from clean bytes.
+        tail.truncate(scan_end);
+        let text: &str = match std::str::from_utf8(&tail[scan_start..]) {
+            Ok(s) => s,
+            Err(_) => {
+                // Should be impossible after the trim above, but stay safe.
+                if pos == 0 {
+                    break;
+                }
+                continue;
+            }
         };
-        let info = v.get("payload").and_then(|p| p.get("info"))?;
-        let recent = info
-            .get("last_token_usage")
-            .and_then(|u| u.get("total_tokens"))
-            .and_then(|t| t.as_u64())?;
-        let accumulated = info
-            .get("total_token_usage")
-            .and_then(|u| u.get("total_tokens"))
-            .and_then(|t| t.as_u64())
-            .unwrap_or(recent);
-        let cw = info
-            .get("model_context_window")
-            .and_then(|c| c.as_u64())? as u32;
-        return Some((recent, accumulated, cw));
+        if let Some(info) = last_token_count_info_in(text) {
+            return Some(info);
+        }
+        if pos == 0 {
+            break;
+        }
     }
     None
+}
+
+/// Scan a UTF-8 slice (in original file order) for the LAST `token_count`
+/// event_msg and return `(last_token_usage.total_tokens,
+/// total_token_usage.total_tokens, model_context_window)`.
+fn last_token_count_info_in(text: &str) -> Option<(u64, u64, u32)> {
+    // Collect (start, end_exclusive) for every complete line (everything
+    // up to and including the trailing '\n'), then walk in reverse so the
+    // first match is the most recent event in this slice. We must carry
+    // the end offset, not just the start, because slicing from `start` to
+    // the end of `text` would otherwise drag in every later line and
+    // produce invalid JSON.
+    let mut line_ranges: Vec<(usize, usize)> = Vec::with_capacity(256);
+    let mut line_start = 0usize;
+    for (i, b) in text.bytes().enumerate() {
+        if b == b'\n' {
+            line_ranges.push((line_start, i + 1));
+            line_start = i + 1;
+        }
+    }
+    // Trailing line without a final newline: include it as a half-open
+    // range up to the end of the slice.
+    if line_start < text.len() {
+        line_ranges.push((line_start, text.len()));
+    }
+    for (start, end) in line_ranges.iter().rev() {
+        let line = &text[*start..*end];
+        if line.is_empty() {
+            continue;
+        }
+        if !line.contains("\"token_count\"") || !line.contains("\"event_msg\"") {
+            continue;
+        }
+        if let Some(info) = parse_token_count_payload(line) {
+            return Some(info);
+        }
+    }
+    None
+}
+
+fn parse_token_count_payload(line: &str) -> Option<(u64, u64, u32)> {
+    let v = serde_json::from_str::<serde_json::Value>(line).ok()?;
+    let info = v.get("payload").and_then(|p| p.get("info"))?;
+    let recent = info
+        .get("last_token_usage")
+        .and_then(|u| u.get("total_tokens"))
+        .and_then(|t| t.as_u64())?;
+    let accumulated = info
+        .get("total_token_usage")
+        .and_then(|u| u.get("total_tokens"))
+        .and_then(|t| t.as_u64())
+        .unwrap_or(recent);
+    let cw = info
+        .get("model_context_window")
+        .and_then(|c| c.as_u64())? as u32;
+    Some((recent, accumulated, cw))
 }
 
 #[derive(Serialize)]
@@ -583,6 +691,62 @@ mod tests {
         content.push('\n');
         std::fs::write(&path, content.as_bytes()).unwrap();
         let (recent, accumulated, cw) = read_last_token_info(&path).expect("should parse");
+        assert_eq!(recent, 2_000);
+        assert_eq!(accumulated, 9_000);
+        assert_eq!(cw, 12_000);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn finds_latest_event_when_buried_past_first_chunk() {
+        // Regression: the old implementation only read the last 1 MiB, so
+        // any `token_count` event more than 1 MiB before EOF was invisible.
+        // For long-running sessions the latest event can sit well past that
+        // boundary (we measured 17+ MiB rollouts in the wild). Build a file
+        // whose only `token_count` is several MiB before the end and confirm
+        // we still locate it.
+        let dir = std::env::temp_dir();
+        let path = dir.join("evocode-tauri-token-count-buried.jsonl");
+        let event = r#"{"timestamp":"2026-05-20T14:14:16Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"total_tokens":241660357},"last_token_usage":{"total_tokens":35698},"model_context_window":258400}}}"#;
+        // ~2 MiB of padding after the event so the only `token_count` is
+        // well outside the first 1 MiB tail window.
+        let mut content = String::new();
+        content.push_str(event);
+        content.push('\n');
+        let padding_line = "{\"type\":\"response_item\",\"payload\":{\"x\":\"filler-padding-line-that-is-quite-long-to-take-up-bytes\"}}\n";
+        for _ in 0..20_000 {
+            content.push_str(padding_line);
+        }
+        std::fs::write(&path, content.as_bytes()).unwrap();
+        let (recent, accumulated, cw) = read_last_token_info(&path)
+            .expect("should locate the buried event by walking back through the file");
+        assert_eq!(recent, 35_698);
+        assert_eq!(accumulated, 241_660_357);
+        assert_eq!(cw, 258_400);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn picks_latest_when_more_recent_line_fails_to_parse() {
+        // Regression: the old implementation returned the first line in the
+        // tail it could parse, so a malformed (truncated/garbled) line
+        // newer than a valid one would silently cause the function to
+        // return the *older* event. The new implementation walks back
+        // through the file when the tail slice has no valid event, so we
+        // must surface the most recent valid one even if a more recent
+        // line is unparseable.
+        let dir = std::env::temp_dir();
+        let path = dir.join("evocode-tauri-token-count-bad-tail.jsonl");
+        let valid = r#"{"timestamp":"2026-01-02T00:00:00Z","type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"total_tokens":9000},"last_token_usage":{"total_tokens":2000},"model_context_window":12000}}}"#;
+        let mut content = String::new();
+        content.push_str(valid);
+        content.push('\n');
+        // Append a deliberately truncated line that mentions token_count
+        // but won't parse as JSON. The function should not get stuck on it.
+        content.push_str("{\"timestamp\":\"2026-06-01T00:00:00Z\",\"type\":\"event_msg\",\"payload\":{\"type\":\"tok");
+        std::fs::write(&path, content.as_bytes()).unwrap();
+        let (recent, accumulated, cw) = read_last_token_info(&path)
+            .expect("should find the valid event despite the truncated tail");
         assert_eq!(recent, 2_000);
         assert_eq!(accumulated, 9_000);
         assert_eq!(cw, 12_000);
@@ -729,16 +893,20 @@ async fn get_sessions(offset: u32, limit: u32) -> Result<SessionsResponse, Strin
             // file. It reports the actual context window in use for this
             // thread (which can differ from the global config if the user
             // switched models mid-session) and the `last_token_usage` for the
-            // current uncompressed window. Fall back to the legacy SQLite
-            // `tokens_used` + catalog/config context window when the rollout
-            // has no `token_count` event yet.
+            // current uncompressed window. When the rollout has no
+            // `token_count` event yet (very fresh session, or pre-0.133
+            // Codex) we still use the catalog/config context window, but we
+            // report `recent = 0` instead of substituting the legacy
+            // `tokens_used` (session-wide cumulative) counter for it. Using
+            // the cumulative as the current window would saturate the card
+            // at 100% on every multi-compact session.
             let (recent, accumulated, cw) = match read_last_token_info(
                 std::path::Path::new(&rollout_path),
             ) {
-                Some(v) => v,
+                Some((recent, accumulated, cw)) => (recent, accumulated, cw),
                 None => {
                     let cw = model_cw(&model, default_cw);
-                    (tokens as u64, tokens as u64, cw)
+                    (0u64, tokens as u64, cw)
                 }
             };
             let total_cells = cw.div_ceil(10000).max(1);
@@ -751,6 +919,12 @@ async fn get_sessions(offset: u32, limit: u32) -> Result<SessionsResponse, Strin
                 model,
                 total: total_cells,
                 used: used_cells,
+                // The cell fields are quantized to 10K tokens for the grid
+                // visualization; carry the exact token totals alongside so
+                // the card footer can show the real number (e.g. 106,234
+                // rather than 110,000).
+                total_tokens: Some(cw as u64),
+                used_tokens: Some(recent),
                 accumulated: Some(accumulated),
                 rollout_path,
             }

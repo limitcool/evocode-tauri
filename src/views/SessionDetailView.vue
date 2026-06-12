@@ -18,7 +18,7 @@
       </div>
       <div class="meta-item">
         <span class="meta-label">{{ t("session.tokens") }}</span>
-        <span class="meta-value">{{ (sessionInfo.used * 10000).toLocaleString() }} / {{ (sessionInfo.total * 10000).toLocaleString() }}</span>
+        <span class="meta-value">{{ formatTokens(sessionInfo.used_tokens, sessionInfo.used) }} / {{ formatTokens(sessionInfo.total_tokens, sessionInfo.total) }}</span>
       </div>
     </section>
 
@@ -42,6 +42,14 @@ const sessionId = route.params.id as string
 const rawContent = ref("")
 const sessionInfo = ref<SessionInfo | null>(null)
 const sessionTitle = ref("")
+
+// Prefer the exact token count from the backend; fall back to
+// cells * 10K for older builds that don't yet emit the precise fields.
+function formatTokens(precise: number | undefined, cells: number | undefined): string {
+  if (precise != null) return precise.toLocaleString()
+  if (cells == null) return "0"
+  return (cells * 10000).toLocaleString()
+}
 
 onMounted(async () => {
   try {
@@ -123,6 +131,3 @@ onMounted(async () => {
   overflow: auto;
 }
 </style>
-
-
-

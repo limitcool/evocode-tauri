@@ -74,6 +74,12 @@ export interface SessionInfo {
   model: string
   total: number
   used: number
+  /** Exact context window in tokens. Optional for back-compat with older builds. */
+  total_tokens?: number
+  /** Exact current window in tokens. Optional for back-compat with older builds. */
+  used_tokens?: number
+  /** Session-wide cumulative token usage (kept across compacts). */
+  accumulated?: number
   rollout_path: string
 }
 
@@ -95,4 +101,3 @@ export async function getSessions(offset: number, limit: number): Promise<Sessio
 export async function getSessionContent(id: string): Promise<SessionMessage[]> {
   return invoke<SessionMessage[]>('get_session_content', { id })
 }
-
