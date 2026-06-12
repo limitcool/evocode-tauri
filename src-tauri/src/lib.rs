@@ -2,7 +2,10 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use serde::Serialize;
 
-use tauri::State;
+use tauri::image::Image;
+use tauri::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::sync::Mutex as AsyncMutex;
 use evocode_config::load_config;
 use evocode_proto::{ServerConfig};
@@ -140,6 +143,11 @@ async fn start_bridge(state: State<'_, BridgeState>) -> Result<String, String> {
 
     *handle_guard = Some(handle);
     Ok(format!("Bridge starting on port {}...", state.port))
+}
+
+#[tauri::command]
+async fn bridge_is_running(state: State<'_, BridgeState>) -> Result<bool, String> {
+    Ok(state.handle.lock().await.is_some())
 }
 
 #[tauri::command]
@@ -511,15 +519,89 @@ async fn get_session_content(id: String) -> Result<Vec<SessionMessage>, String> 
 }
 
 
+const MAIN_WINDOW_LABEL: &str = "main";
+const TRAY_ID: &str = "evocode-tray";
+const MENU_SHOW: &str = "tray_show";
+const MENU_START: &str = "tray_start";
+const MENU_STOP: &str = "tray_stop";
+const MENU_QUIT: &str = "tray_quit";
+
+fn load_tray_icon() -> Image<'static> {
+    Image::from_bytes(include_bytes!("../icons/32x32.png")).expect("valid tray icon")
+}
+
+fn show_main_window(app: &AppHandle) {
+    if let Some(win) = app.get_webview_window(MAIN_WINDOW_LABEL) {
+        let _ = win.show();
+        let _ = win.unminimize();
+        let _ = win.set_focus();
+    }
+}
+
+fn build_tray_menu(app: &AppHandle) -> tauri::Result<Menu<tauri::Wry>> {
+    let show = MenuItem::with_id(app, MENU_SHOW, "Show Window", true, None::<&str>)?;
+    let start = MenuItem::with_id(app, MENU_START, "Start Bridge", true, None::<&str>)?;
+    let stop = MenuItem::with_id(app, MENU_STOP, "Stop Bridge", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, MENU_QUIT, "Quit", true, None::<&str>)?;
+    let sep = PredefinedMenuItem::separator(app)?;
+    Menu::with_items(app, &[&show, &sep, &start, &stop, &sep, &quit])
+}
+
+fn handle_tray_menu_event(app: &AppHandle, event: MenuEvent) {
+    match event.id().as_ref() {
+        MENU_SHOW => show_main_window(app),
+        MENU_QUIT => {
+            app.exit(0);
+        }
+        MENU_START | MENU_STOP => {
+            show_main_window(app);
+            let action = if event.id().as_ref() == MENU_START { "start" } else { "stop" };
+            let _ = app.emit("tray-bridge-action", action);
+        }
+        _ => {}
+    }
+}
+
+fn handle_tray_icon_event(app: &AppHandle, event: TrayIconEvent) {
+    if let TrayIconEvent::Click {
+        button: MouseButton::Left,
+        button_state: MouseButtonState::Up,
+        ..
+    } = event
+    {
+        show_main_window(app);
+    }
+}
+
+fn handle_window_event(window: &tauri::Window, event: &tauri::WindowEvent) {
+    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+        if window.label() == MAIN_WINDOW_LABEL {
+            api.prevent_close();
+            let _ = window.hide();
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let mut builder = tauri::Builder::default();
+
+    #[cfg(desktop)]
+    {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            // A second instance was launched: focus the existing main window.
+            show_main_window(app);
+        }));
+    }
+
+    builder
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())
         .manage(BridgeState::new(17761))
         .invoke_handler(tauri::generate_handler![
             start_bridge,
             stop_bridge,
+            bridge_is_running,
             bridge_status,
             get_bridge_url,
             read_config,
@@ -531,6 +613,24 @@ pub fn run() {
             get_sessions,
             get_session_content,
         ])
+        .on_window_event(handle_window_event)
+        .setup(|app| {
+            let handle = app.handle().clone();
+            let icon = load_tray_icon();
+            let menu = build_tray_menu(&handle)?;
+            let _tray = TrayIconBuilder::with_id(TRAY_ID)
+                .icon(icon)
+                .tooltip("evocode")
+                .menu(&menu)
+                .show_menu_on_left_click(false)
+                .on_menu_event(|app, event| handle_tray_menu_event(app, event))
+                .on_tray_icon_event(|tray, event| {
+                    let app = tray.app_handle();
+                    handle_tray_icon_event(app, event);
+                })
+                .build(app)?;
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
