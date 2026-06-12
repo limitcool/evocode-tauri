@@ -752,13 +752,170 @@ mod tests {
         assert_eq!(cw, 12_000);
         let _ = std::fs::remove_file(&path);
     }
+
+    #[test]
+    fn rollout_parser_emits_structured_entries() {
+        // Mini-rollout exercising every entry kind the UI cares about.
+        let content = r#"
+{"timestamp":"2026-06-12T17:16:57.682Z","type":"session_meta","payload":{"id":"x"}}
+{"timestamp":"2026-06-12T17:16:57.683Z","type":"turn_context","payload":{"model":"MiniMax-M3"}}
+{"timestamp":"2026-06-12T17:16:57.685Z","type":"event_msg","payload":{"type":"user_message","message":"hi"}}
+{"timestamp":"2026-06-12T17:16:57.686Z","type":"response_item","payload":{"type":"message","role":"developer","content":[{"type":"input_text","text":"system prompt"}]}}
+{"timestamp":"2026-06-12T17:17:03.946Z","type":"event_msg","payload":{"type":"agent_reasoning","text":"thinking…"}}
+{"timestamp":"2026-06-12T17:17:03.947Z","type":"response_item","payload":{"type":"reasoning","summary":[{"type":"summary_text","text":"dup"}]}}
+{"timestamp":"2026-06-12T17:17:04.125Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"ls\"}","call_id":"c1"}}
+{"timestamp":"2026-06-12T17:17:04.186Z","type":"response_item","payload":{"type":"function_call_output","call_id":"c1","output":"file.rs"}}
+{"timestamp":"2026-06-12T17:28:09.033Z","type":"response_item","payload":{"type":"custom_tool_call","name":"apply_patch","input":"@@ -1 +1 @@\n-a\n+b","call_id":"c2"}}
+{"timestamp":"2026-06-12T17:28:09.036Z","type":"response_item","payload":{"type":"custom_tool_call_output","call_id":"c2","output":"Success"}}
+{"timestamp":"2026-06-12T17:28:09.200Z","type":"event_msg","payload":{"type":"patch_apply_end","call_id":"c2","success":true,"stdout":"Success","stderr":"","changes":{"src/foo.rs":{"type":"update","unified_diff":"@@ -1 +1 @@\n-a\n+b","move_path":null}}}}
+{"timestamp":"2026-06-12T17:41:32.046Z","type":"event_msg","payload":{"type":"task_complete","last_agent_message":"bye","duration_ms":1474491}}
+{"timestamp":"2026-06-12T17:48:49.770Z","type":"event_msg","payload":{"type":"thread_rolled_back","num_turns":1}}
+{"timestamp":"2026-06-12T17:17:55.323Z","type":"event_msg","payload":{"type":"agent_message","message":"hello back"}}
+"#;
+        let entries = parse_rollout_entries(content);
+        // Expected kinds in order: User, Reasoning, ToolCall (function),
+        // ToolOutput, ToolCall (custom), ToolOutput, PatchEnd, TurnBoundary,
+        // Assistant. session_meta, turn_context, the duplicate reasoning,
+        // and thread_rolled_back must be dropped.
+        let kinds: Vec<String> = entries
+            .iter()
+            .map(|e| match e {
+                SessionEntry::User { .. } => "user".to_string(),
+                SessionEntry::Assistant { .. } => "assistant".to_string(),
+                SessionEntry::Reasoning { .. } => "reasoning".to_string(),
+                SessionEntry::ToolCall { tool_kind, .. } => tool_kind.clone(),
+                SessionEntry::ToolOutput { .. } => "tool_output".to_string(),
+                SessionEntry::PatchEnd { .. } => "patch_end".to_string(),
+                SessionEntry::TurnBoundary { .. } => "turn_boundary".to_string(),
+            })
+            .collect();
+        assert_eq!(
+            kinds,
+            vec![
+                "user".to_string(),
+                "reasoning".to_string(),
+                "function".to_string(),
+                "tool_output".to_string(),
+                "custom".to_string(),
+                "tool_output".to_string(),
+                "patch_end".to_string(),
+                "turn_boundary".to_string(),
+                "assistant".to_string(),
+            ]
+        );
+        // Reasoning text comes from `event_msg:agent_reasoning` (the
+        // `response_item:reasoning` line must be de-duplicated away).
+        if let SessionEntry::Reasoning { text, .. } = &entries[1] {
+            assert_eq!(text, "thinking…");
+        } else {
+            panic!("expected reasoning entry at index 1");
+        }
+        // PatchEnd carries a diff snippet.
+        if let SessionEntry::PatchEnd { diffs, success, .. } = &entries[6] {
+            assert!(*success);
+            assert_eq!(diffs.len(), 1);
+            assert_eq!(diffs[0].path, "src/foo.rs");
+            assert!(diffs[0].diff.as_deref().unwrap_or("").contains("+b"));
+        } else {
+            panic!("expected patch_end entry at index 6");
+        }
+    }
+
+    #[test]
+    fn rollout_parser_truncates_huge_tool_outputs() {
+        let huge = "x".repeat(TOOL_OUTPUT_MAX_CHARS + 100);
+        let content = format!(
+            r#"{{"timestamp":"t","type":"response_item","payload":{{"type":"function_call_output","call_id":"c","output":"{}"}}}}"#,
+            huge
+        );
+        let entries = parse_rollout_entries(&content);
+        assert_eq!(entries.len(), 1);
+        match &entries[0] {
+            SessionEntry::ToolOutput { output, truncated, .. } => {
+                assert!(*truncated, "truncated flag should be set for oversized output");
+                assert!(output.chars().count() <= TOOL_OUTPUT_MAX_CHARS + 4);
+            }
+            _ => panic!("expected tool_output entry"),
+        }
+    }
+}
+
+/// Structured, frontend-friendly view of a single line from a rollout
+/// `.jsonl` file. We parse the raw Codex event stream and emit one of
+/// these variants per interesting entry. The frontend discriminates on
+/// `kind` to render the appropriate chat / thinking / tool-call view.
+///
+/// We deliberately keep the noise out (`session_meta`, `turn_context`,
+/// `task_started`, `token_count`, `thread_rolled_back`) and deduplicate
+/// the doubled reasoning stream (Codex emits both `event_msg:agent_reasoning`
+/// AND a `response_item:reasoning` for every thinking step; we keep the
+/// event_msg form, which is the human-facing summary).
+#[derive(Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum SessionEntry {
+    /// User prompt text (from `event_msg:user_message`).
+    User {
+        timestamp: String,
+        text: String,
+    },
+    /// Assistant text reply (from `event_msg:agent_message`).
+    Assistant {
+        timestamp: String,
+        text: String,
+    },
+    /// Model thinking / chain-of-thought summary.
+    Reasoning {
+        timestamp: String,
+        text: String,
+    },
+    /// Tool invocation. `tool_kind` is `"function"` for the standard
+    /// `function_call` / `function_call_output` pair and `"custom"` for
+    /// `custom_tool_call` / `custom_tool_call_output` (e.g. `apply_patch`).
+    ToolCall {
+        timestamp: String,
+        tool_kind: String,
+        name: String,
+        call_id: String,
+        /// Raw arguments as a JSON-encoded string, kept verbatim so the
+        /// frontend can pretty-print or syntax-highlight it.
+        arguments: String,
+    },
+    /// Result of a tool call. The frontend pairs this with the matching
+    /// `ToolCall` by `call_id`.
+    ToolOutput {
+        timestamp: String,
+        call_id: String,
+        /// Tool stdout / output. May be truncated server-side for huge
+        /// blobs (the `truncated` flag tells the UI to show a "show more"
+        /// affordance).
+        output: String,
+        truncated: bool,
+    },
+    /// Result of `apply_patch`. Carries the stdout/stderr lines and a
+    /// short unified-diff snippet per changed file for a quick visual.
+    PatchEnd {
+        timestamp: String,
+        call_id: Option<String>,
+        success: bool,
+        stdout: String,
+        stderr: String,
+        /// One short diff per touched file, in `path\n<diff>` form.
+        diffs: Vec<PatchFileDiff>,
+    },
+    /// Boundary marker emitted at the end of every Codex turn.
+    TurnBoundary {
+        timestamp: String,
+        last_message: String,
+        duration_ms: u64,
+    },
 }
 
 #[derive(Serialize)]
-pub struct SessionMessage {
-    pub timestamp: String,
-    pub text: String,
-    pub raw: String,
+pub struct PatchFileDiff {
+    pub path: String,
+    /// Trimmed unified diff. `None` if the patch is a brand-new file or
+    /// if the diff is missing.
+    pub diff: Option<String>,
 }
 
 #[tauri::command]
@@ -935,7 +1092,7 @@ async fn get_sessions(offset: u32, limit: u32) -> Result<SessionsResponse, Strin
 }
 
 #[tauri::command]
-async fn get_session_content(id: String) -> Result<Vec<SessionMessage>, String> {
+async fn get_session_content(id: String) -> Result<Vec<SessionEntry>, String> {
     let home = dirs::home_dir().ok_or("Cannot find home directory")?;
     let codex_home = home.join(".codex");
 
@@ -1010,41 +1167,287 @@ async fn get_session_content(id: String) -> Result<Vec<SessionMessage>, String> 
 
     let content = std::fs::read_to_string(path).map_err(|e| format!("Read error: {}", e))?;
 
-    let mut messages = Vec::new();
+    let mut entries = parse_rollout_entries(&content);
+
+    // If the rollout is huge, keep only the tail so the IPC payload stays
+    // bounded. We pick a generous cap because the frontend renders each
+    // entry as a compact card; the cap is mainly to protect against the
+    // multi-MiB sessions observed in the wild.
+    const MAX_ENTRIES: usize = 500;
+    if entries.len() > MAX_ENTRIES {
+        let drop = entries.len() - MAX_ENTRIES;
+        entries.drain(..drop);
+    }
+    Ok(entries)
+}
+
+/// Maximum length (in characters) of a single tool output / patch stdout
+/// blob we keep verbatim. Anything longer is truncated with a `truncated`
+/// flag so the frontend can offer a "show more" affordance.
+const TOOL_OUTPUT_MAX_CHARS: usize = 4_000;
+
+/// Truncate a string at a char boundary, appending a small marker.
+fn truncate_chars(s: &str, max: usize) -> (String, bool) {
+    if s.chars().count() <= max {
+        return (s.to_string(), false);
+    }
+    let mut out = String::with_capacity(max + 32);
+    for (i, c) in s.char_indices() {
+        if i >= max {
+            break;
+        }
+        out.push(c);
+    }
+    out.push_str("…");
+    (out, true)
+}
+
+/// Walk the rollout JSONL and convert it into a flat list of
+/// `SessionEntry` items. Uninteresting lines (session_meta, turn_context,
+/// token_count, task_started, thread_rolled_back, non-user
+/// `response_item:message`) are dropped. Reasoning is emitted exactly
+/// once even though Codex records it in two parallel forms.
+fn parse_rollout_entries(content: &str) -> Vec<SessionEntry> {
+    let mut out = Vec::new();
     for line in content.lines() {
-        let timestamp = serde_json::from_str::<serde_json::Value>(line)
-            .ok()
-            .and_then(|v| {
-                v.get("timestamp")
-                    .and_then(|t| t.as_str())
-                    .map(String::from)
-            })
-            .unwrap_or_default();
-
-        // Truncate raw line to reasonable length
-        let raw = if line.len() > 2000 {
-            format!(
-                "{}... [truncated {} bytes]",
-                &line[..line.floor_char_boundary(2000)],
-                line.len() - 2000
-            )
-        } else {
-            line.to_string()
+        let v = match serde_json::from_str::<serde_json::Value>(line) {
+            Ok(v) => v,
+            Err(_) => continue,
         };
+        let timestamp = v
+            .get("timestamp")
+            .and_then(|t| t.as_str())
+            .unwrap_or("")
+            .to_string();
+        let event_type = v.get("type").and_then(|t| t.as_str()).unwrap_or("");
+        match event_type {
+            "event_msg" => {
+                let payload = v.get("payload");
+                let sub = payload
+                    .and_then(|p| p.get("type"))
+                    .and_then(|t| t.as_str())
+                    .unwrap_or("");
+                match sub {
+                    "user_message" => {
+                        let text = payload
+                            .and_then(|p| p.get("message"))
+                            .and_then(|m| m.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        if !text.is_empty() {
+                            out.push(SessionEntry::User { timestamp, text });
+                        }
+                    }
+                    "agent_message" => {
+                        let text = payload
+                            .and_then(|p| p.get("message"))
+                            .and_then(|m| m.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        if !text.is_empty() {
+                            out.push(SessionEntry::Assistant { timestamp, text });
+                        }
+                    }
+                    "agent_reasoning" => {
+                        // Preferred form: human-facing reasoning summary.
+                        // Codex also writes a `response_item:reasoning`
+                        // with the same content; we skip that one below.
+                        let text = payload
+                            .and_then(|p| p.get("text"))
+                            .and_then(|t| t.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        if !text.is_empty() {
+                            out.push(SessionEntry::Reasoning { timestamp, text });
+                        }
+                    }
+                    "patch_apply_end" => {
+                        let call_id = payload
+                            .and_then(|p| p.get("call_id"))
+                            .and_then(|t| t.as_str())
+                            .map(String::from);
+                        let success = payload
+                            .and_then(|p| p.get("success"))
+                            .and_then(|t| t.as_bool())
+                            .unwrap_or(true);
+                        let stdout = payload
+                            .and_then(|p| p.get("stdout"))
+                            .and_then(|t| t.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        let stderr = payload
+                            .and_then(|p| p.get("stderr"))
+                            .and_then(|t| t.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        let diffs = collect_patch_diffs(payload.and_then(|p| p.get("changes")));
+                        out.push(SessionEntry::PatchEnd {
+                            timestamp,
+                            call_id,
+                            success,
+                            stdout,
+                            stderr,
+                            diffs,
+                        });
+                    }
+                    "task_complete" => {
+                        let last_message = payload
+                            .and_then(|p| p.get("last_agent_message"))
+                            .and_then(|t| t.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        let duration_ms = payload
+                            .and_then(|p| p.get("duration_ms"))
+                            .and_then(|t| t.as_u64())
+                            .unwrap_or(0);
+                        out.push(SessionEntry::TurnBoundary {
+                            timestamp,
+                            last_message,
+                            duration_ms,
+                        });
+                    }
+                    // The rest (`task_started`, `token_count`,
+                    // `thread_rolled_back`) is intentionally dropped.
+                    _ => {}
+                }
+            }
+            "response_item" => {
+                let payload = v.get("payload");
+                let sub = payload
+                    .and_then(|p| p.get("type"))
+                    .and_then(|t| t.as_str())
+                    .unwrap_or("");
+                match sub {
+                    "function_call" => {
+                        let name = payload
+                            .and_then(|p| p.get("name"))
+                            .and_then(|t| t.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        let arguments = payload
+                            .and_then(|p| p.get("arguments"))
+                            .and_then(|t| t.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        let call_id = payload
+                            .and_then(|p| p.get("call_id"))
+                            .and_then(|t| t.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        out.push(SessionEntry::ToolCall {
+                            timestamp,
+                            tool_kind: "function".into(),
+                            name,
+                            call_id,
+                            arguments,
+                        });
+                    }
+                    "custom_tool_call" => {
+                        let name = payload
+                            .and_then(|p| p.get("name"))
+                            .and_then(|t| t.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        let call_id = payload
+                            .and_then(|p| p.get("call_id"))
+                            .and_then(|t| t.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        // `input` can be a string or a structured object.
+                        let arguments = match payload.and_then(|p| p.get("input")) {
+                            Some(s) if s.is_string() => s
+                                .as_str()
+                                .map(|s| s.to_string())
+                                .unwrap_or_default(),
+                            Some(v) => v.to_string(),
+                            None => String::new(),
+                        };
+                        out.push(SessionEntry::ToolCall {
+                            timestamp,
+                            tool_kind: "custom".into(),
+                            name,
+                            call_id,
+                            arguments,
+                        });
+                    }
+                    "function_call_output" => {
+                        let call_id = payload
+                            .and_then(|p| p.get("call_id"))
+                            .and_then(|t| t.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        let raw = payload
+                            .and_then(|p| p.get("output"))
+                            .and_then(|t| t.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        let (output, truncated) = truncate_chars(&raw, TOOL_OUTPUT_MAX_CHARS);
+                        out.push(SessionEntry::ToolOutput {
+                            timestamp,
+                            call_id,
+                            output,
+                            truncated,
+                        });
+                    }
+                    "custom_tool_call_output" => {
+                        let call_id = payload
+                            .and_then(|p| p.get("call_id"))
+                            .and_then(|t| t.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        let raw = payload
+                            .and_then(|p| p.get("output"))
+                            .and_then(|t| t.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        let (output, truncated) = truncate_chars(&raw, TOOL_OUTPUT_MAX_CHARS);
+                        out.push(SessionEntry::ToolOutput {
+                            timestamp,
+                            call_id,
+                            output,
+                            truncated,
+                        });
+                    }
+                    // `response_item:reasoning` is intentionally skipped:
+                    // the human-facing `event_msg:agent_reasoning` is
+                    // already emitted above and the two carry the same
+                    // text. `response_item:message` is also skipped
+                    // (the developer / system messages are not part of
+                    // the visible transcript).
+                    _ => {}
+                }
+            }
+            // `session_meta`, `turn_context`, anything else: skip.
+            _ => {}
+        }
+    }
+    out
+}
 
-        messages.push(SessionMessage {
-            timestamp,
-            text: String::new(),
-            raw,
+/// Extract a short unified-diff snippet per touched file from
+/// `event_msg:patch_apply_end.changes`. We cap the per-file diff size so
+/// a 5 MB patch doesn't blow up the IPC payload.
+fn collect_patch_diffs(changes: Option<&serde_json::Value>) -> Vec<PatchFileDiff> {
+    const DIFF_MAX_CHARS: usize = 2_000;
+    let Some(obj) = changes.and_then(|c| c.as_object()) else {
+        return Vec::new();
+    };
+    let mut out = Vec::with_capacity(obj.len());
+    for (path, change) in obj {
+        let diff = change
+            .get("unified_diff")
+            .and_then(|d| d.as_str())
+            .map(|d| {
+                let (trimmed, _) = truncate_chars(d, DIFF_MAX_CHARS);
+                if trimmed.is_empty() { None } else { Some(trimmed) }
+            })
+            .unwrap_or(None);
+        out.push(PatchFileDiff {
+            path: path.clone(),
+            diff,
         });
     }
-
-    // Take last 50 messages to avoid huge responses
-    if messages.len() > 50 {
-        messages = messages.split_off(messages.len() - 50);
-    }
-
-    Ok(messages)
+    out
 }
 
 const MAIN_WINDOW_LABEL: &str = "main";

@@ -88,16 +88,51 @@ export interface SessionsResponse {
   total: number
 }
 
-export interface SessionMessage {
-  timestamp: string
-  text: string
-  raw: string
-}
+/**
+ * Discriminated union mirroring the Rust `SessionEntry` enum. The UI
+ * switches on `kind` to pick the right renderer (chat bubble, thinking
+ * block, tool call card, tool output, patch status, turn boundary).
+ */
+export type SessionEntry =
+  | { kind: "user"; timestamp: string; text: string }
+  | { kind: "assistant"; timestamp: string; text: string }
+  | { kind: "reasoning"; timestamp: string; text: string }
+  | {
+      kind: "tool_call"
+      timestamp: string
+      tool_kind: "function" | "custom"
+      name: string
+      call_id: string
+      /** JSON-encoded arguments / input. The UI pretty-prints this. */
+      arguments: string
+    }
+  | {
+      kind: "tool_output"
+      timestamp: string
+      call_id: string
+      output: string
+      truncated: boolean
+    }
+  | {
+      kind: "patch_end"
+      timestamp: string
+      call_id: string | null
+      success: boolean
+      stdout: string
+      stderr: string
+      diffs: Array<{ path: string; diff: string | null }>
+    }
+  | {
+      kind: "turn_boundary"
+      timestamp: string
+      last_message: string
+      duration_ms: number
+    }
 
 export async function getSessions(offset: number, limit: number): Promise<SessionsResponse> {
   return invoke<SessionsResponse>('get_sessions', { offset, limit })
 }
 
-export async function getSessionContent(id: string): Promise<SessionMessage[]> {
-  return invoke<SessionMessage[]>('get_session_content', { id })
+export async function getSessionContent(id: string): Promise<SessionEntry[]> {
+  return invoke<SessionEntry[]>('get_session_content', { id })
 }
