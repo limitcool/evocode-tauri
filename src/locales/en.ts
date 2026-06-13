@@ -87,7 +87,7 @@
   "config.wire.openai": "OpenAI Responses (/responses)",
   "config.tab.general": "General",
   "config.tab.connection": "Connection",
-  "config.tab.limits": "Model limits",
+
   "config.general.title": "General",
   "config.general.desc": "App launch behavior and config file location.",
   "config.autostart.title": "Launch at login",

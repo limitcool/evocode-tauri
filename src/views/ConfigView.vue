@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="config-view">
     <header class="page-head fade-up">
       <div>
@@ -103,7 +103,7 @@
           </div>
         </div>
 
-        <!-- Wire API Switch - replaces the Start from a template panel -->
+        <!-- Wire API Switch -->
         <div class="glass panel">
           <div class="panel-head">
             <div>
@@ -129,14 +129,9 @@
             <div class="head-actions">
               <a-button
                 size="small"
-                :disabled="!activeId || !formState.baseUrl"
-                :loading="testingConn"
-                @click="testConnection"
+                :disabled="!activeId"
+                @click="resetForm"
               >
-                <template #icon><ApiOutlined /></template>
-                {{ t("config.form.test") }}
-              </a-button>
-              <a-button size="small" :disabled="!activeId" @click="resetForm">
                 <template #icon><ReloadOutlined /></template>
                 Reset
               </a-button>
@@ -206,11 +201,9 @@
             </a-row>
           </a-form>
         </div>
-      </a-tab-pane>
 
-      <!-- ============== Limits ============== -->
-      <a-tab-pane key="limits" :tab="t('config.tab.limits')">
-        <div class="glass panel">
+        <!-- ============== Model Limits (per-provider) ============== -->
+        <div v-if="activeId" class="glass panel">
           <div class="panel-head">
             <div>
               <div class="panel-title">{{ t("config.limits.title") }}</div>
@@ -223,9 +216,9 @@
             <div class="slider-head">
               <div>
                 <div class="slider-label">{{ t("config.limits.context") }}</div>
-                <div class="slider-value mono">{{ contextLabel(limits.contextWindow) }}<span class="muted-3"> {{ t("config.limits.tokens") }}</span></div>
+                <div class="slider-value mono">{{ contextLabel(ctxValue) }}<span class="muted-3"> {{ t("config.limits.tokens") }}</span></div>
               </div>
-              <a-tag class="active-tag">{{ contextLabel(limits.contextWindow) }}</a-tag>
+              <a-tag class="active-tag">{{ contextLabel(ctxValue) }}</a-tag>
             </div>
             <div
               class="slider-rail"
@@ -240,9 +233,9 @@
                 :style="{ left: tickLeft(i) + '%' }"
                 :title="t('config.limits.preset_' + p.key) + ' - ' + p.label"
               />
-              <div class="slider-fill" :style="{ width: fillPercent + '%' }" />
-              <div class="slider-thumb" :style="{ left: fillPercent + '%' }">
-                <span class="thumb-tip">{{ contextLabel(limits.contextWindow) }}</span>
+              <div class="slider-fill" :style="{ width: ctxPercent + '%' }" />
+              <div class="slider-thumb" :style="{ left: ctxPercent + '%' }">
+                <span class="thumb-tip">{{ contextLabel(ctxValue) }}</span>
               </div>
             </div>
             <div class="slider-stops">
@@ -251,7 +244,7 @@
                 :key="`ctx-${p.key}`"
                 type="button"
                 class="slider-stop"
-                :class="{ active: limits.contextWindow === p.context }"
+                :class="{ active: ctxValue === p.context }"
                 @click="applyLimitPreset(p.key)"
               >
                 <span class="stop-dot" :style="{ background: p.color }" />
@@ -266,9 +259,9 @@
             <div class="slider-head">
               <div>
                 <div class="slider-label">{{ t("config.limits.compact") }}</div>
-                <div class="slider-value mono">{{ compactRatio }}%<span class="muted-3"> {{ t("config.limits.of") }} {{ contextLabel(limits.contextWindow) }}</span></div>
+                <div class="slider-value mono">{{ compactRatio }}%<span class="muted-3"> {{ t("config.limits.of") }} {{ contextLabel(ctxValue) }}</span></div>
               </div>
-              <a-tag class="active-tag compact-tag">≈ {{ contextLabel(compactTokens) }} {{ t("config.limits.tokens") }}</a-tag>
+              <a-tag class="active-tag compact-tag">鈮?{{ contextLabel(compactTokens) }} {{ t("config.limits.tokens") }}</a-tag>
             </div>
             <div
               class="slider-rail"
@@ -277,50 +270,60 @@
               @touchstart.passive="(e) => startDrag(e, 'ratio')"
             >
               <span
-                v-for="t in RATIO_TICKS"
-                :key="`ratio-tick-${t}`"
+                v-for="(p, i) in LIMIT_PRESETS"
+                :key="`ratio-tick-${p.key}`"
                 class="slider-tick"
-                :style="{ left: t + '%' }"
-                :title="t + '%'"
+                :style="{ left: tickLeft(i) + '%' }"
               />
               <div class="slider-fill compact" :style="{ width: compactRatio + '%' }" />
               <div class="slider-thumb" :style="{ left: compactRatio + '%' }">
                 <span class="thumb-tip">{{ compactRatio }}%</span>
               </div>
             </div>
-            <!-- No quick selection buttons - removed as requested -->
           </div>
         </div>
       </a-tab-pane>
     </a-tabs>
 
-    <footer class="actions fade-up">
-      <a-button
-        type="primary"
-        size="large"
+    <!-- Bottom actions bar -->
+    <div class="actions fade-up">
+      <a-button type="primary" size="large" shape="round"
         :loading="saving"
         :disabled="!activeId"
         @click="handleSave"
       >
         <template #icon><SaveOutlined /></template>
-        Save Config
+        {{ t("config.save") }}
       </a-button>
-      <a-button
-        size="large"
-        :disabled="!activeId"
+      <a-button size="large" shape="round"
         @click="handleSyncToCodex"
       >
         <template #icon><SyncOutlined /></template>
-        Sync to Codex
+        {{ t("config.sync") }}
       </a-button>
-    </footer>
+      <a-button size="large" shape="round"
+        :disabled="!activeId || !formState.baseUrl"
+        :loading="testingConn"
+        @click="testConnection"
+        class="ghost"
+      >
+        <template #icon><ApiOutlined /></template>
+        {{ t("config.form.test") }}
+      </a-button>
+    </div>
   </div>
 </template>
-
 <script setup lang="ts">
-import { reactive, ref, computed, onMounted, onUnmounted } from "vue"
+import { ref, reactive, computed, onMounted, onUnmounted } from "vue"
 import { useLocale } from "../composables/useLocale"
-import { message } from "ant-design-vue"
+import { useRouter } from "vue-router"
+
+import {
+  readConfig, writeConfig,
+  testProviderConnectivity,
+  openConfigDir as openConfigDirApi,
+  syncToCodex,
+} from "../api/bridge"
 import {
   LeftOutlined,
   PlusOutlined,
@@ -328,13 +331,14 @@ import {
   SyncOutlined,
   ReloadOutlined,
   CloseCircleFilled,
-  ApiOutlined,
-  MessageOutlined,
-  RocketOutlined,
   FolderOpenOutlined,
+  ApiOutlined,
 } from "@ant-design/icons-vue"
-import { readConfig, writeConfig, syncToCodex, testProviderConnectivity, openConfigDir as openConfigDirApi } from "../api/bridge"
-import { isAutostartEnabled, enableAutostart, disableAutostart } from "../api/autostart"
+import { message } from "ant-design-vue"
+import { enable, isEnabled, disable } from "@tauri-apps/plugin-autostart"
+
+const { t } = useLocale()
+const router = useRouter()
 
 interface Provider {
   providerId: string
@@ -343,54 +347,55 @@ interface Provider {
   model: string
   apiKey: string
   apiKeyHeader: string
-}
-
-interface Limits {
-  contextWindow: number
-  compactLimit: number
+  modelContextWindow: number
+  modelAutoCompactLimit: number
 }
 
 const PRESETS: Array<{
   key: string
   name: string
-  tag: string
-  desc: string
-  baseUrl: string
-  color: string
-  icon: any
-  values: Partial<Provider>
+  values: { wireApi: string; baseUrl: string; apiKeyHeader: string }
 }> = [
-  {
-    key: "anthropic",
-    name: "Anthropic",
-    tag: "/v1/messages",
-    desc: "Anthropic Messages protocol.",
-    baseUrl: "https://api.anthropic.com",
-    color: "linear-gradient(135deg, #d97757, #b6553a)",
-    icon: MessageOutlined,
-    values: { wireApi: "anthropic", apiKeyHeader: "X-Api-Key" },
-  },
-  {
-    key: "chat_completions",
-    name: "OpenAI Chat",
-    tag: "/v1/chat/completions",
-    desc: "Standard Chat Completions.",
-    baseUrl: "https://api.openai.com/v1",
-    color: "linear-gradient(135deg, #10a37f, #0d8a6b)",
-    icon: ApiOutlined,
-    values: { wireApi: "chat_completions", apiKeyHeader: "Authorization" },
-  },
-  {
-    key: "openai",
-    name: "OpenAI Responses",
-    tag: "/responses",
-    desc: "OpenAI Responses protocol.",
-    baseUrl: "https://api.openai.com/v1",
-    color: "linear-gradient(135deg, #6366f1, #4338ca)",
-    icon: RocketOutlined,
-    values: { wireApi: "openai", apiKeyHeader: "Authorization" },
-  },
+  { key: "anthropic",  name: "Anthropic",  values: { wireApi: "anthropic", baseUrl: "", apiKeyHeader: "X-Api-Key" } },
+  { key: "openai",     name: "OpenAI",     values: { wireApi: "openai", baseUrl: "", apiKeyHeader: "Authorization" } },
+  { key: "chat",       name: "Chat",       values: { wireApi: "chat_completions", baseUrl: "", apiKeyHeader: "Authorization" } },
 ]
+
+const wireOptions = PRESETS.map((p) => ({
+  value: p.key,
+  label: p.name,
+}))
+
+const activeKey = ref("general")
+
+// Provider management state
+const providerIds = ref<string[]>([])
+const providers = reactive<Record<string, Provider>>({})
+const activeId = ref("")
+const newProviderName = ref("")
+const testingConn = ref(false)
+const connResult = ref<null | { ok: boolean; status: number; latency_ms: number; message: string }>(null)
+
+// Each provider stores its own limits. The form state mirrors the active one.
+const formState = reactive<Provider>({
+  providerId: "",
+  wireApi: "anthropic",
+  baseUrl: "",
+  model: "",
+  apiKey: "",
+  apiKeyHeader: "X-Api-Key",
+  modelContextWindow: DEFAULT_CONTEXT_WINDOW,
+  modelAutoCompactLimit: DEFAULT_COMPACT_LIMIT,
+})
+
+const activePresetKey = ref("anthropic")
+const saving = ref(false)
+
+// Autostart
+const autostartEnabled = ref(false)
+const autostartLoading = ref(false)
+const openingDir = ref(false)
+const configDirHint = ref("")
 
 const LIMIT_PRESETS = [
   { key: "128k",  name: "Small",    label: "128K",  context: 128_000,  compact: 112_000,  color: "#34d399" },
@@ -399,71 +404,41 @@ const LIMIT_PRESETS = [
   { key: "1m",    name: "Huge",     label: "1M",    context: 1_000_000, compact: 900_000, color: "#f472b6" },
 ]
 
-const CONTEXT_MIN = 64_000
-const CONTEXT_MAX = 1_048_576
+const CONTEXT_MIN = 16_000
+const CONTEXT_MAX = 2_000_000
 const DEFAULT_CONTEXT_WINDOW = 256_000
 const DEFAULT_COMPACT_LIMIT = 220_000
 
-const RATIO_TICKS = [10, 25, 50, 75, 90]
-
-const { t } = useLocale()
-
-const activeKey = ref("general")
-const providerIds = ref<string[]>([])
-const newProviderName = ref("")
-const saving = ref(false)
-
-// Autostart state
-const autostartEnabled = ref(false)
-const autostartLoading = ref(false)
-
-// Open config dir state
-const openingDir = ref(false)
-const configDirHint = ref("")
-
-// Provider connectivity test state
-const testingConn = ref(false)
-const connResult = ref<null | { ok: boolean; status: number; latency_ms: number; message: string }>(null)
-
-// Each provider keeps its own fields
-const providers = reactive<Record<string, Provider>>({})
-const limits = reactive<Limits>({
-  contextWindow: DEFAULT_CONTEXT_WINDOW,
-  compactLimit: DEFAULT_COMPACT_LIMIT,
+// Computed for the active provider's limits
+const ctxValue = computed(() => formState.modelContextWindow || DEFAULT_CONTEXT_WINDOW)
+const compactRatio = computed(() => {
+  if (!formState.modelContextWindow) return 0
+  return Math.round((formState.modelAutoCompactLimit / formState.modelContextWindow) * 1000) / 10
 })
-const activeId = ref("")
-
-// Form state
-const formState = reactive<Provider>({
-  providerId: "",
-  wireApi: "anthropic",
-  baseUrl: "",
-  model: "",
-  apiKey: "",
-  apiKeyHeader: "X-Api-Key"
+const compactTokens = computed(() => Math.round(ctxValue.value * compactRatio.value / 100))
+const ctxPercent = computed(() => {
+  const v = Math.min(CONTEXT_MAX, Math.max(CONTEXT_MIN, ctxValue.value))
+  return Math.round(((v - CONTEXT_MIN) / (CONTEXT_MAX - CONTEXT_MIN)) * 100)
 })
 
-// Wire API switch state - bidirectional sync
-const activePresetKey = ref<string>("anthropic")
-const wireOptions = computed(() =>
-  PRESETS.map((p) => ({ value: p.key, label: p.name })),
-)
-
-// Bidirectional sync functions
-function onWireApiChange(key: string | number) {
-  const preset = PRESETS.find((p) => p.key === key)
-  if (!preset) return
-  if (preset.values.wireApi) formState.wireApi = preset.values.wireApi
-  if (preset.values.apiKeyHeader) formState.apiKeyHeader = preset.values.apiKeyHeader
-  if (activeId.value) providers[activeId.value] = { ...formState, providerId: activeId.value }
+function contextLabel(n: number) {
+  if (!n) return "0"
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1).replace(/\.0$/, "") + "M"
+  if (n >= 1_000) return Math.round(n / 1_000) + "K"
+  return String(n)
 }
 
-function onWireApiSelectChange() {
-  // Sync the segmented switch when select changes
-  const matchingPreset = PRESETS.find((p) => p.values.wireApi === formState.wireApi)
-  if (matchingPreset && matchingPreset.key !== activePresetKey.value) {
-    activePresetKey.value = matchingPreset.key
-  }
+function tickLeft(i: number) {
+  const p = LIMIT_PRESETS[i]
+  const v = Math.min(CONTEXT_MAX, Math.max(CONTEXT_MIN, p.context))
+  return Math.round(((v - CONTEXT_MIN) / (CONTEXT_MAX - CONTEXT_MIN)) * 100)
+}
+
+function applyLimitPreset(key: string) {
+  const p = LIMIT_PRESETS.find((x) => x.key === key)
+  if (!p) return
+  formState.modelContextWindow = p.context
+  formState.modelAutoCompactLimit = p.compact
 }
 
 // Slider drag handling
@@ -505,14 +480,13 @@ function applyDrag(target: 'context' | 'ratio', clientX: number) {
 
 function setContextWindow(value: number) {
   const next = Math.min(CONTEXT_MAX, Math.max(CONTEXT_MIN, Math.round(value)))
-  limits.contextWindow = next
-  // Auto-set compact to 80% of new context window
-  limits.compactLimit = Math.round(next * 0.8)
+  formState.modelContextWindow = next
+  formState.modelAutoCompactLimit = Math.round(next * 0.8)
 }
 
 function setCompactRatio(percent: number) {
   const p = Math.min(100, Math.max(0, percent))
-  limits.compactLimit = Math.round(limits.contextWindow * p / 100)
+  formState.modelAutoCompactLimit = Math.round(formState.modelContextWindow * p / 100)
 }
 
 function startDrag(e: MouseEvent | TouchEvent, target: 'context' | 'ratio') {
@@ -547,37 +521,6 @@ function stopDrag() {
 
 onUnmounted(stopDrag)
 
-// Computed values for limits display
-const compactRatio = computed(() => {
-  if (!limits.contextWindow) return 0
-  return Math.round((limits.compactLimit / limits.contextWindow) * 1000) / 10
-})
-const compactTokens = computed(() => Math.round(limits.contextWindow * compactRatio.value / 100))
-const fillPercent = computed(() => {
-  const v = Math.min(CONTEXT_MAX, Math.max(CONTEXT_MIN, limits.contextWindow || CONTEXT_MIN))
-  return Math.round(((v - CONTEXT_MIN) / (CONTEXT_MAX - CONTEXT_MIN)) * 100)
-})
-
-function contextLabel(n: number) {
-  if (!n) return "0"
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(n % 1_000_000 === 0 ? 0 : 1).replace(/\.0$/, "") + "M"
-  if (n >= 1_000) return Math.round(n / 1_000) + "K"
-  return String(n)
-}
-
-function tickLeft(i: number) {
-  const p = LIMIT_PRESETS[i]
-  const v = Math.min(CONTEXT_MAX, Math.max(CONTEXT_MIN, p.context))
-  return Math.round(((v - CONTEXT_MIN) / (CONTEXT_MAX - CONTEXT_MIN)) * 100)
-}
-
-function applyLimitPreset(key: string) {
-  const p = LIMIT_PRESETS.find((x) => x.key === key)
-  if (!p) return
-  limits.contextWindow = p.context
-  limits.compactLimit = p.compact
-}
-
 // Provider management functions
 function snapshotActive() {
   if (!activeId.value) return
@@ -587,7 +530,16 @@ function snapshotActive() {
 function loadActiveIntoForm() {
   const id = activeId.value
   if (!id || !providers[id]) {
-    Object.assign(formState, { providerId: "", wireApi: "anthropic", baseUrl: "", model: "", apiKey: "", apiKeyHeader: "X-Api-Key" })
+    Object.assign(formState, {
+      providerId: "",
+      wireApi: "anthropic",
+      baseUrl: "",
+      model: "",
+      apiKey: "",
+      apiKeyHeader: "X-Api-Key",
+      modelContextWindow: DEFAULT_CONTEXT_WINDOW,
+      modelAutoCompactLimit: DEFAULT_COMPACT_LIMIT,
+    })
     return
   }
   Object.assign(formState, providers[id])
@@ -613,7 +565,9 @@ function addProvider() {
       baseUrl: "",
       model: "",
       apiKey: "",
-      apiKeyHeader: "X-Api-Key"
+      apiKeyHeader: "X-Api-Key",
+      modelContextWindow: DEFAULT_CONTEXT_WINDOW,
+      modelAutoCompactLimit: DEFAULT_COMPACT_LIMIT,
     }
   }
   newProviderName.value = ""
@@ -636,6 +590,8 @@ function resetForm() {
   formState.apiKey = ""
   formState.wireApi = "anthropic"
   formState.apiKeyHeader = "X-Api-Key"
+  formState.modelContextWindow = DEFAULT_CONTEXT_WINDOW
+  formState.modelAutoCompactLimit = DEFAULT_COMPACT_LIMIT
   if (activeId.value) providers[activeId.value] = { ...formState, providerId: activeId.value }
   const matchingPreset = PRESETS.find((p) => p.values.wireApi === formState.wireApi)
   if (matchingPreset) activePresetKey.value = matchingPreset.key
@@ -661,12 +617,6 @@ function parseConfig(text: string) {
 
     if (trimmed.startsWith("provider = ")) {
       activeFromTop = trimmed.replace("provider = ", "").replace(/"/g, "")
-    } else if (trimmed.startsWith("model_context_window = ")) {
-      const v = parseInt(trimmed.replace("model_context_window = ", ""))
-      if (!isNaN(v)) limits.contextWindow = v
-    } else if (trimmed.startsWith("model_auto_compact_token_limit = ")) {
-      const v = parseInt(trimmed.replace("model_auto_compact_token_limit = ", ""))
-      if (!isNaN(v)) limits.compactLimit = v
     } else if (trimmed.startsWith("[providers.")) {
       currentProvider = trimmed.replace("[providers.", "").replace("]", "")
       inProviderSection = true
@@ -678,10 +628,12 @@ function parseConfig(text: string) {
           baseUrl: "",
           model: "",
           apiKey: "",
-          apiKeyHeader: "X-Api-Key"
+          apiKeyHeader: "X-Api-Key",
+          modelContextWindow: DEFAULT_CONTEXT_WINDOW,
+          modelAutoCompactLimit: DEFAULT_COMPACT_LIMIT,
         }
       }
-    } else if (trimmed.startsWith("[") && trimmed !== "[providers." + currentProvider + "]") {
+    } else if (trimmed.startsWith("[")) {
       inProviderSection = false
     } else if (inProviderSection) {
       const p = providers[currentProvider]
@@ -690,7 +642,15 @@ function parseConfig(text: string) {
       else if (trimmed.startsWith("base_url = ")) p.baseUrl = trimmed.replace("base_url = ", "").replace(/"/g, "")
       else if (trimmed.startsWith("model = ")) p.model = trimmed.replace("model = ", "").replace(/"/g, "")
       else if (trimmed.startsWith("api_key = ")) p.apiKey = trimmed.replace("api_key = ", "").replace(/"/g, "")
-      else if (trimmed.startsWith("api_key_header = ")) p.apiKeyHeader = trimmed.replace("api_key_header = \"", "").replace(/"/g, "")
+      else if (trimmed.startsWith("api_key_header = ")) p.apiKeyHeader = trimmed.replace("api_key_header = ", "").replace(/"/g, "")
+      else if (trimmed.startsWith("model_context_window = ")) {
+        const v = parseInt(trimmed.replace("model_context_window = ", ""))
+        if (!isNaN(v)) p.modelContextWindow = v
+      }
+      else if (trimmed.startsWith("model_auto_compact_token_limit = ")) {
+        const v = parseInt(trimmed.replace("model_auto_compact_token_limit = ", ""))
+        if (!isNaN(v)) p.modelAutoCompactLimit = v
+      }
     }
   }
 
@@ -700,32 +660,36 @@ function parseConfig(text: string) {
 
 function buildConfig(): string {
   snapshotActive()
-  const ctx = limits.contextWindow || DEFAULT_CONTEXT_WINDOW
-  const compact = limits.compactLimit || DEFAULT_COMPACT_LIMIT
   const active = activeId.value
 
   const blocks: string[] = [
     "# evocode bridge config",
     "# Read by evocode-cli, not by upstream Codex directly.",
     "",
-    `provider = "${active}"`,
-    "",
-    `model_context_window = ${ctx}`,
-    `model_auto_compact_token_limit = ${compact}`,
+    "provider = \"" + active + "\"",
     "",
   ]
 
   for (const id of providerIds.value) {
     const p = providers[id] || {
-      providerId: id, wireApi: "anthropic", baseUrl: "", model: "", apiKey: "", apiKeyHeader: "X-Api-Key",
+      providerId: id,
+      wireApi: "anthropic",
+      baseUrl: "",
+      model: "",
+      apiKey: "",
+      apiKeyHeader: "X-Api-Key",
+      modelContextWindow: DEFAULT_CONTEXT_WINDOW,
+      modelAutoCompactLimit: DEFAULT_COMPACT_LIMIT,
     }
     blocks.push(
-      `[providers.${id}]`,
-      `wire_api = "${p.wireApi}"`,
-      `base_url = "${p.baseUrl}"`,
-      `model = "${p.model}"`,
-      `api_key = "${p.apiKey}"`,
-      `api_key_header = "${p.apiKeyHeader}"`,
+      "[providers." + id + "]",
+      "wire_api = \"" + p.wireApi + "\"",
+      "base_url = \"" + p.baseUrl + "\"",
+      "model = \"" + p.model + "\"",
+      "api_key = \"" + p.apiKey + "\"",
+      "api_key_header = \"" + p.apiKeyHeader + "\"",
+      "model_context_window = " + (p.modelContextWindow || DEFAULT_CONTEXT_WINDOW),
+      "model_auto_compact_token_limit = " + (p.modelAutoCompactLimit || DEFAULT_COMPACT_LIMIT),
       "",
     )
   }
@@ -740,7 +704,7 @@ async function handleSave() {
   snapshotActive()
   const cur = providers[activeId.value]
   if (!cur?.model || !cur?.baseUrl) {
-    message.warning(`Fill in Model and Base URL for "${activeId.value}".`)
+    message.warning("Fill in Model and Base URL for \"" + activeId.value + "\".")
     return
   }
   saving.value = true
@@ -761,53 +725,62 @@ async function handleSyncToCodex() {
     message.warning("Add a provider first.")
     return
   }
-  saving.value = true
   try {
     await syncToCodex()
-    message.success("Synced to .codex/config.toml!", 4)
+    message.success("Synced to Codex!", 4)
   } catch (e: any) {
-    message.error("Failed to sync: " + (e?.message || String(e)), 4)
-  } finally {
-    saving.value = false
-  }
-}
-
-async function loadAutostartStatus() {
-  try {
-    autostartEnabled.value = await isAutostartEnabled()
-  } catch {
-    autostartEnabled.value = false
-  }
-}
-
-async function onAutostartChange(next: boolean) {
-  autostartLoading.value = true
-  const prev = autostartEnabled.value
-  // Optimistic toggle; revert on failure.
-  autostartEnabled.value = next
-  try {
-    if (next) {
-      await enableAutostart()
-      message.success(t("config.autostart.enabled"), 3)
-    } else {
-      await disableAutostart()
-      message.success(t("config.autostart.disabled"), 3)
-    }
-  } catch (e: any) {
-    autostartEnabled.value = prev
-    message.error(
-      t("config.autostart.error") + ": " + (e?.message || String(e)),
-      4,
-    )
-  } finally {
-    autostartLoading.value = false
+    message.error("Sync failed: " + (e?.message || String(e)), 4)
   }
 }
 
 function buildConfigDirHint() {
   // Show the conventional path; the renderer cannot resolve USERPROFILE.
   const sep = navigator?.platform?.toLowerCase().includes("win") ? "\\" : "/"
-  configDirHint.value = `~/.evocode${sep}config.toml`
+  configDirHint.value = "~" + sep + ".evocode" + sep + "config.toml"
+}
+
+async function loadAutostartStatus() {
+  try {
+    autostartEnabled.value = await isEnabled()
+  } catch {
+    autostartEnabled.value = false
+  }
+}
+
+async function onAutostartChange(checked: boolean) {
+  autostartLoading.value = true
+  try {
+    if (checked) {
+      await enable()
+      message.success(t("config.autostart.enabled"), 3)
+    } else {
+      await disable()
+      message.success(t("config.autostart.disabled"), 3)
+    }
+    autostartEnabled.value = checked
+  } catch (e: any) {
+    message.error(t("config.autostart.error") + ": " + (e?.message || String(e)), 4)
+  } finally {
+    autostartLoading.value = false
+  }
+}
+
+function onWireApiChange(key: string | number) {
+  const preset = PRESETS.find((p) => p.key === key)
+  if (!preset) return
+  formState.wireApi = preset.values.wireApi
+  formState.apiKeyHeader = preset.values.apiKeyHeader
+  // Keep current baseUrl if user already typed one
+  snapshotActive()
+}
+
+function onWireApiSelectChange(value: string) {
+  formState.wireApi = value
+  const matchingPreset = PRESETS.find((p) => p.values.wireApi === value)
+  if (matchingPreset) {
+    activePresetKey.value = matchingPreset.key
+    formState.apiKeyHeader = matchingPreset.values.apiKeyHeader
+  }
 }
 
 async function openConfigDir() {

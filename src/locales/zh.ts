@@ -87,7 +87,7 @@
   "config.wire.openai": "OpenAI Responses（/responses）",
   "config.tab.general": "通用",
   "config.tab.connection": "连接",
-  "config.tab.limits": "模型限制",
+
   "config.general.title": "通用设置",
   "config.general.desc": "应用启动行为与配置文件位置。",
   "config.autostart.title": "开机自启动",
