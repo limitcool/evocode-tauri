@@ -427,7 +427,7 @@ function doAddProvider() {
   if (m) wirePresetKey[name] = m.key
 }
 
-function doRemoveProvider() {
+async function doRemoveProvider() {
   const id = removeTarget.value
   if (!id) return
   const idx = providerIds.value.indexOf(id)
@@ -441,6 +441,9 @@ function doRemoveProvider() {
   if (editingId.value === id) {
     editingId.value = providerIds.value[0] || ""
   }
+  try {
+    await writeConfig(buildConfig())
+  } catch {}
 }
 
 // parse / build / sync
