@@ -1,13 +1,13 @@
 ﻿<template>
   <div class="config-view">
     <a-tabs v-model:activeKey="activeKey" class="config-tabs fade-up">
+      <a-tab-pane key="provider" :tab="t('config.tab.connection')">
+        <ConnectionPanel />
+      </a-tab-pane>
       <a-tab-pane key="general" :tab="t('config.tab.general')">
         <div class="glass panel">
           <GeneralPanel />
         </div>
-      </a-tab-pane>
-      <a-tab-pane key="provider" :tab="t('config.tab.connection')">
-        <ConnectionPanel />
       </a-tab-pane>
     </a-tabs>
   </div>
@@ -21,7 +21,7 @@ import ConnectionPanel from "./config_view/ConnectionPanel.vue"
 
 const { t } = useLocale()
 
-const activeKey = ref("general")
+const activeKey = ref("provider")
 </script>
 
 <style scoped>
