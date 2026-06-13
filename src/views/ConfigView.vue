@@ -7,49 +7,21 @@
         </div>
       </a-tab-pane>
       <a-tab-pane key="provider" :tab="t('config.tab.connection')">
-        <ConnectionPanel ref="connRef" />
+        <ConnectionPanel />
       </a-tab-pane>
     </a-tabs>
-
-    <!-- Bottom actions: save only -->
-    <div class="actions fade-up">
-      <a-button type="primary" size="large" shape="round"
-        :loading="saving" :disabled="!connRef"
-        @click="handleSave">
-        <template #icon><SaveOutlined /></template>
-        {{ t("config.save") }}
-      </a-button>
-    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref } from "vue"
 import { useLocale } from "../composables/useLocale"
-import { writeConfig } from "../api/bridge"
-import { message } from "ant-design-vue"
 import GeneralPanel from "./config_view/GeneralPanel.vue"
 import ConnectionPanel from "./config_view/ConnectionPanel.vue"
 
 const { t } = useLocale()
 
 const activeKey = ref("general")
-const connRef = ref<InstanceType<typeof ConnectionPanel> | null>(null)
-const saving = ref(false)
-
-async function handleSave() {
-  if (!connRef.value) return
-  saving.value = true
-  try {
-    const cfg = connRef.value.buildConfig()
-    await writeConfig(cfg)
-    message.success("Config saved! Restart the bridge to apply changes.", 4)
-  } catch (e: any) {
-    message.error("Failed to save: " + (e?.message || String(e)), 4)
-  } finally {
-    saving.value = false
-  }
-}
 </script>
 
 <style scoped>

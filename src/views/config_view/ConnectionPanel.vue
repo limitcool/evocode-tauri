@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="connection-panel">
     <div class="glass panel">
       <div class="panel-head">
@@ -39,15 +39,6 @@
           :tab="key"
         >
           <div class="tab-body">
-            <!-- Wire API -->
-            <div class="tab-section">
-              <div class="tab-section-head">
-                <div class="tab-section-title">{{ t("config.wire_api") }}</div>
-                <div class="tab-section-sub muted-3">{{ t("config.wire_api.desc") }}</div>
-              </div>
-              <a-segmented v-model:value="wirePresetKey[key]" :options="wireOptions" block @change="(val: string | number) => onWireApiChange(key, val)" />
-            </div>
-
             <!-- Provider config form -->
             <div class="tab-section">
               <div class="tab-section-head">
@@ -235,7 +226,6 @@ const PRESETS = [
   { key: "openai", values: { wireApi: "openai" as const, apiKeyHeader: "Authorization" as const } },
 ]
 
-const wireOptions = PRESETS.map((p) => ({ value: p.key, label: t("config.wire." + p.values.wireApi) }))
 
 const providerIds = ref<string[]>([])
 const providers = reactive<Record<string, Provider>>({})
@@ -362,15 +352,6 @@ function applyLimitPreset(id: string, key: string) {
   if (!preset) return
   p.modelContextWindow = preset.context
   p.modelAutoCompactLimit = preset.compact
-}
-
-function onWireApiChange(id: string, key: string | number) {
-  const p = providers[id]
-  if (!p) return
-  const preset = PRESETS.find((pr) => pr.key === key)
-  if (!preset) return
-  p.wireApi = preset.values.wireApi
-  p.apiKeyHeader = preset.values.apiKeyHeader
 }
 
 function onWireApiSelectChange(id: string, value: string) {
@@ -584,3 +565,6 @@ onMounted(async () => {
 .tab-section-title { font-size: 14px; font-weight: 600; color: var(--text-1); }
 .tab-section-sub { font-size: 12px; margin-top: 1px; }
 </style>
+
+
+

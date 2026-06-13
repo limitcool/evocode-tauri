@@ -253,11 +253,11 @@ async fn sync_to_codex() -> Result<(), String> {
 }
 
 #[derive(Serialize)]
-pub struct ConnectivityResult {
-    pub ok: bool,
-    pub status: u16,
-    pub latency_ms: u128,
-    pub message: String,
+struct ConnectivityResult {
+    ok: bool,
+    status: u16,
+    latency_ms: u128,
+    message: String,
 }
 
 #[tauri::command]
@@ -267,37 +267,17 @@ async fn test_provider_connectivity(
     wire_api: String,
     api_key_header: Option<String>,
 ) -> Result<ConnectivityResult, String> {
-    // Trim trailing slash and pick the right probe endpoint per protocol.
-    let base = base_url.trim_end_matches('/').to_string();
-    if base.is_empty() {
-        return Err("Base URL is empty".into());
-    }
-
-    // Pick a probe endpoint that is cheap and indicates the upstream is alive.
-    // Anthropic: GET /v1/messages (returns 405 for GET, but proves reachability + auth wiring).
-    // OpenAI-compatible (chat_completions / openai Responses): GET /models (returns 200 or 401).
-    let probe_path = match wire_api.as_str() {
-        "anthropic" => "/v1/messages",
-        _ => "/models",
-    };
-    let url = format!("{}{}", base, probe_path);
-
     let header_name = api_key_header
-        .as_deref()
-        .map(|s| s.trim())
-        .filter(|s| !s.is_empty())
-        .unwrap_or(if wire_api == "anthropic" {
-            "X-Api-Key"
-        } else {
-            "Authorization"
-        });
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| if wire_api == "anthropic" { "X-Api-Key".to_string() } else { "Authorization".to_string() })
+        .to_string();
 
     let header_value = if wire_api == "anthropic" {
         api_key.clone()
     } else if header_name.eq_ignore_ascii_case("Authorization") {
         format!("Bearer {}", api_key)
     } else {
-        api_key.clone()
+        api_key
     };
 
     let client = reqwest::Client::builder()
@@ -306,57 +286,65 @@ async fn test_provider_connectivity(
         .map_err(|e| e.to_string())?;
 
     let started = std::time::Instant::now();
+
+    let (url, body) = match wire_api.as_str() {
+        "anthropic" => (
+            format!("{}/v1/messages", base_url.trim_end_matches('/')),
+            serde_json::json!({
+                "model": "",
+                "max_tokens": 1,
+                "messages": [{"role": "user", "content": "hi"}]
+            }),
+        ),
+        "chat_completions" => (
+            format!("{}/v1/chat/completions", base_url.trim_end_matches('/')),
+            serde_json::json!({
+                "model": "",
+                "messages": [{"role": "user", "content": "hi"}],
+                "max_tokens": 1
+            }),
+        ),
+        _ => (
+            format!("{}/v1/responses", base_url.trim_end_matches('/')),
+            serde_json::json!({
+                "model": "",
+                "input": "hi",
+                "max_output_tokens": 1
+            }),
+        ),
+    };
+
     let resp = client
-        .get(&url)
+        .post(&url)
         .header(header_name, header_value)
-        .header("Accept", "application/json")
+        .header("Content-Type", "application/json")
+        .json(&body)
         .send()
         .await;
+    
+
     let latency_ms = started.elapsed().as_millis();
 
     match resp {
         Ok(r) => {
             let status = r.status().as_u16();
-            // Treat anything < 500 (incl. 401/403/404/405) as reachable.
-            // 5xx and connection-level failures are considered not ok.
-            let ok = status < 500;
-            let message = if ok {
+            let message = if status < 500 {
                 if (200..300).contains(&status) {
-                    format!("Reachable (HTTP {})", status)
-                } else if status == 400 {
-                    format!("Bad request (HTTP {})", status)
-                } else if status == 401 || status == 403 {
-                    format!("Auth rejected (HTTP {})", status)
-                } else if status == 404 || status == 405 {
-                    format!("Endpoint not found (HTTP {})", status)
+                    "Connected successfully".into()
                 } else {
                     format!("Reachable (HTTP {})", status)
                 }
             } else {
                 format!("Server error (HTTP {})", status)
             };
-            Ok(ConnectivityResult {
-                ok,
-                status,
-                latency_ms,
-                message,
-            })
+            Ok(ConnectivityResult { ok: status < 500, status, latency_ms, message })
         }
-        Err(e) => {
-            let kind = if e.is_timeout() {
-                "timeout"
-            } else if e.is_connect() {
-                "connect failed"
-            } else {
-                "request failed"
-            };
-            Ok(ConnectivityResult {
-                ok: false,
-                status: 0,
-                latency_ms,
-                message: format!("{}: {}", kind, e),
-            })
-        }
+        Err(e) => Ok(ConnectivityResult {
+            ok: false,
+            status: 0,
+            latency_ms,
+            message: format!("{}: {}", if e.is_timeout() { "timeout" } else if e.is_connect() { "connection refused" } else { "request failed" }, e),
+        }),
     }
 }
 
