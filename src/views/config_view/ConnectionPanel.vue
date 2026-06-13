@@ -2,8 +2,12 @@
   <div class="connection-panel">
     <div class="glass panel">
       <div class="panel-head">
-        <div>
+        <div style="display: inline-flex; align-items: center; gap: 10px;">
           <div class="panel-title">{{ t("config.providers") }}</div>
+          <a-button size="small" type="dashed" @click="showAddModal = true">
+            <template #icon><PlusOutlined /></template>
+            {{ t("config.providers.add") }}
+          </a-button>
         </div>
         <div class="active-with-sync">
           <a-tag v-if="activeId" class="active-tag">{{ t("config.providers.active") }} {{ activeId }}</a-tag>
@@ -155,11 +159,12 @@
       </a-tabs>
       <div v-else class="empty-tabs-hint">{{ t("config.sync.no_providers") }}</div>
 
-      <a-button type="dashed" class="add-btn-row" @click="showAddModal = true">
-        <template #icon><PlusOutlined /></template>
-        {{ t("config.providers.add") }}
+    </div>
+    <div class="actions-bar">
+      <a-button type="primary" size="large" shape="round" :loading="saving" @click="handleSave">
+        <template #icon><SaveOutlined /></template>
+        {{ t("config.save") }}
       </a-button>
-
     </div>
 
     <a-modal
@@ -191,10 +196,9 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, onUnmounted } from "vue"
 import { useLocale } from "../../composables/useLocale"
-import { writeConfig, syncToCodex, readConfig } from "../../api/bridge"
+import { writeConfig, syncToCodex, readConfig, testProviderConnectivity } from "../../api/bridge"
 import { message } from "ant-design-vue"
-import { PlusOutlined, ReloadOutlined, ApiOutlined, InfoCircleOutlined } from "@ant-design/icons-vue"
-import { testProviderConnectivity } from "../../api/bridge"
+import { PlusOutlined, ReloadOutlined, ApiOutlined, InfoCircleOutlined, SaveOutlined } from "@ant-design/icons-vue"
 
 const { t } = useLocale()
 
@@ -370,7 +374,7 @@ async function testConnection(id: string) {
   if (!p || !p.baseUrl) { message.warning(t("config.form.test_need_url")); return }
   testingConn.value = true; connResult.value = null
   try {
-    const r = await testProviderConnectivity(p.baseUrl, p.apiKey || "", p.wireApi || "anthropic", p.apiKeyHeader || undefined)
+    const r = await testProviderConnectivity(p.baseUrl, p.apiKey || "", p.wireApi || "anthropic", p.apiKeyHeader || undefined, p.model || undefined)
     connResult.value = r
   } catch (e: any) {
     connResult.value = { ok: false, status: 0, latency_ms: 0, message: t("config.form.test_error") + ": " + (e?.message || String(e)) }
@@ -564,6 +568,14 @@ onMounted(async () => {
 .tab-section-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .tab-section-title { font-size: 14px; font-weight: 600; color: var(--text-1); }
 .tab-section-sub { font-size: 12px; margin-top: 1px; }
+.actions-bar {
+  position: sticky; bottom: 16px; z-index: 5;
+  display: flex; justify-content: flex-end;
+  padding: 12px 16px; border-radius: var(--r-lg);
+  background: var(--bg-glass); border: 1px solid var(--border);
+  backdrop-filter: blur(14px) saturate(140%);
+  box-shadow: var(--shadow-md);
+}
 </style>
 
 

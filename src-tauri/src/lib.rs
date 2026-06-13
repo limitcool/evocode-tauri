@@ -1,3 +1,5 @@
+mod connectivity;
+
 use serde::Serialize;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -252,100 +254,22 @@ async fn sync_to_codex() -> Result<(), String> {
         .map_err(|e| e.to_string())
 }
 
-#[derive(Serialize)]
-struct ConnectivityResult {
-    ok: bool,
-    status: u16,
-    latency_ms: u128,
-    message: String,
-}
-
 #[tauri::command]
 async fn test_provider_connectivity(
     base_url: String,
     api_key: String,
     wire_api: String,
     api_key_header: Option<String>,
-) -> Result<ConnectivityResult, String> {
-    let header_name = api_key_header
-        .filter(|s| !s.trim().is_empty())
-        .unwrap_or_else(|| if wire_api == "anthropic" { "X-Api-Key".to_string() } else { "Authorization".to_string() })
-        .to_string();
-
-    let header_value = if wire_api == "anthropic" {
-        api_key.clone()
-    } else if header_name.eq_ignore_ascii_case("Authorization") {
-        format!("Bearer {}", api_key)
-    } else {
-        api_key
-    };
-
-    let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(15))
-        .build()
-        .map_err(|e| e.to_string())?;
-
-    let started = std::time::Instant::now();
-
-    let (url, body) = match wire_api.as_str() {
-        "anthropic" => (
-            format!("{}/v1/messages", base_url.trim_end_matches('/')),
-            serde_json::json!({
-                "model": "",
-                "max_tokens": 1,
-                "messages": [{"role": "user", "content": "hi"}]
-            }),
-        ),
-        "chat_completions" => (
-            format!("{}/v1/chat/completions", base_url.trim_end_matches('/')),
-            serde_json::json!({
-                "model": "",
-                "messages": [{"role": "user", "content": "hi"}],
-                "max_tokens": 1
-            }),
-        ),
-        _ => (
-            format!("{}/v1/responses", base_url.trim_end_matches('/')),
-            serde_json::json!({
-                "model": "",
-                "input": "hi",
-                "max_output_tokens": 1
-            }),
-        ),
-    };
-
-    let resp = client
-        .post(&url)
-        .header(header_name, header_value)
-        .header("Content-Type", "application/json")
-        .json(&body)
-        .send()
-        .await;
-    
-
-    let latency_ms = started.elapsed().as_millis();
-
-    match resp {
-        Ok(r) => {
-            let status = r.status().as_u16();
-            let message = if status < 500 {
-                if (200..300).contains(&status) {
-                    "Connected successfully".into()
-                } else {
-                    format!("Reachable (HTTP {})", status)
-                }
-            } else {
-                format!("Server error (HTTP {})", status)
-            };
-            Ok(ConnectivityResult { ok: status < 500, status, latency_ms, message })
-        }
-        Err(e) => Ok(ConnectivityResult {
-            ok: false,
-            status: 0,
-            latency_ms,
-            message: format!("{}: {}", if e.is_timeout() { "timeout" } else if e.is_connect() { "connection refused" } else { "request failed" }, e),
-        }),
-    }
+    model: Option<String>,
+) -> Result<connectivity::ConnectivityResult, String> {
+    Ok(connectivity::test_provider(
+        &base_url,
+        &api_key,
+        &wire_api,
+        api_key_header.as_deref(),
+        model.as_deref(),
+    )
+    .await)
 }
 
 #[tauri::command]

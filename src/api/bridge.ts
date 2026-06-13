@@ -28,12 +28,14 @@ export async function testProviderConnectivity(
   apiKey: string,
   wireApi: string,
   apiKeyHeader?: string,
+  model?: string,
 ): Promise<ConnectivityResult> {
   return invoke<ConnectivityResult>('test_provider_connectivity', {
     baseUrl,
     apiKey,
     wireApi,
     apiKeyHeader,
+    model,
   })
 }
 

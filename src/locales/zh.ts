@@ -59,7 +59,7 @@
   "config.providers.remove_confirm": "确定移除 {name}？",
   "config.providers.placeholder": "新 provider id",
   "config.providers.add": "添加",
-  "config.providers.active": "当前激活：",
+  "config.providers.active": "Codex当前激活：",
   "config.wire_api": "Wire API",
   "config.wire_api.desc": "选择协议。Model 和 Base URL 在下方分别填写。",
   "config.wire_api.tooltip": "上游 Provider 使用哪种 API 协议",

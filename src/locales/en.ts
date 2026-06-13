@@ -59,7 +59,7 @@
   "config.providers.remove_confirm": "Remove {name}?",
   "config.providers.placeholder": "new provider id",
   "config.providers.add": "Add",
-  "config.providers.active": "Active:",
+  "config.providers.active": "Codex Active:",
   "config.wire_api": "Wire API",
   "config.wire_api.desc": "Choose the protocol. Model and Base URL are filled separately below.",
   "config.wire_api.tooltip": "Which API protocol this upstream provider speaks",
