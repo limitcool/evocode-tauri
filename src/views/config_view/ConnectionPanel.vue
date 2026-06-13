@@ -213,7 +213,7 @@ interface Provider {
 }
 
 const CONTEXT_MIN = 16_000
-const CONTEXT_MAX = 2_000_000
+const CONTEXT_MAX = 10_000_000
 const DEFAULT_CONTEXT_WINDOW = 128_000
 const DEFAULT_COMPACT_LIMIT = 100_000
 
@@ -221,7 +221,7 @@ const LIMIT_PRESETS = [
   { key: "256k", context: 128_000, compact: 100_000, labelKey: "config.limits.preset_256k" as const },
   { key: "512k", context: 256_000, compact: 220_000, labelKey: "config.limits.preset_512k" as const },
   { key: "1m", context: 1_000_000, compact: 800_000, labelKey: "config.limits.preset_1m" as const },
-  { key: "compact", context: 200_000, compact: 40_000, labelKey: "config.limits.preset_compact" as const },
+  { key: "10m", context: 10_000_000, compact: 8_000_000, labelKey: "config.limits.preset_10m" as const },
 ]
 
 const PRESETS = [
