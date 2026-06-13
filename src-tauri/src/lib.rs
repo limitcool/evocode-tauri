@@ -763,7 +763,7 @@ mod tests {
 {"timestamp":"2026-06-12T17:16:57.683Z","type":"turn_context","payload":{"model":"MiniMax-M3"}}
 {"timestamp":"2026-06-12T17:16:57.685Z","type":"event_msg","payload":{"type":"user_message","message":"hi"}}
 {"timestamp":"2026-06-12T17:16:57.686Z","type":"response_item","payload":{"type":"message","role":"developer","content":[{"type":"input_text","text":"system prompt"}]}}
-{"timestamp":"2026-06-12T17:17:03.946Z","type":"event_msg","payload":{"type":"agent_reasoning","text":"thinking…"}}
+{"timestamp":"2026-06-12T17:17:03.946Z","type":"event_msg","payload":{"type":"agent_reasoning","text":"thinking"}}
 {"timestamp":"2026-06-12T17:17:03.947Z","type":"response_item","payload":{"type":"reasoning","summary":[{"type":"summary_text","text":"dup"}]}}
 {"timestamp":"2026-06-12T17:17:04.125Z","type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{\"cmd\":\"ls\"}","call_id":"c1"}}
 {"timestamp":"2026-06-12T17:17:04.186Z","type":"response_item","payload":{"type":"function_call_output","call_id":"c1","output":"file.rs"}}
@@ -808,7 +808,7 @@ mod tests {
         // Reasoning text comes from `event_msg:agent_reasoning` (the
         // `response_item:reasoning` line must be de-duplicated away).
         if let SessionEntry::Reasoning { text, .. } = &entries[1] {
-            assert_eq!(text, "thinking…");
+            assert_eq!(text, "thinking");
         } else {
             panic!("expected reasoning entry at index 1");
         }
