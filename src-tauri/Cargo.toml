@@ -17,7 +17,16 @@ tauri-build = { version = "2", features = [] }
 [dependencies]
 anyhow = "1"
 serde = { version = "1", features = ["derive"] }
-tauri = { version = "2", features = ["devtools", "tray-icon", "image-png"] }
+tauri = { version = "2", default-features = false, features = [
+    "devtools",
+    "tray-icon",
+    "image-png",
+    "wry",
+    "common-controls-v6",
+    "dynamic-acl",
+    "x11",
+    "dbus",
+] }
 tauri-plugin-shell = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-single-instance = "2"
@@ -34,6 +43,3 @@ reqwest = {version = "0.13", features = ["json"] }
 serde_json = "1.0.150"
 sqlx = { version = "0.9.0", features = ["runtime-tokio", "sqlite"] }
 
-# brotli v8.0.3 has an internal conflict between alloc-no-stdlib v2 and v3.
-# Pin to v2 to keep its Allocator trait unified across the dep tree.
-alloc-no-stdlib = "=2.0.4"
