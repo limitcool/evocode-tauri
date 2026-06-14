@@ -22,6 +22,13 @@
               {{ id }}
             </a-select-option>
           </a-select>
+          <a-button
+            v-if="providerIds.length"
+            size="small"
+            :loading="syncing"
+            @click="handleSyncToCodex(activeId)">
+            <template #icon><SyncOutlined /></template>
+          </a-button>
           <a-tag v-else style="font-weight: 400;">{{ t("config.sync.no_providers") }}</a-tag>
         </div>
       </div>
@@ -201,7 +208,7 @@ import { ref, reactive, onMounted, onUnmounted } from "vue"
 import { useLocale } from "../../composables/useLocale"
 import { writeConfig, syncToCodex, readConfig, testProviderConnectivity } from "../../api/bridge"
 import { message } from "ant-design-vue"
-import { PlusOutlined, ReloadOutlined, ApiOutlined, InfoCircleOutlined, SaveOutlined } from "@ant-design/icons-vue"
+import { PlusOutlined, ReloadOutlined, ApiOutlined, InfoCircleOutlined, SaveOutlined, SyncOutlined } from "@ant-design/icons-vue"
 
 const { t } = useLocale()
 
